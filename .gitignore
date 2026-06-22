@@ -1,0 +1,11 @@
+# Jekyll build output (not needed; .nojekyll serves source directly)
+_site/
+
+# Unreferenced backup/original comparison assets (kept locally, not published)
+DiffProxy/compare - 副本/
+DiffProxy/compare_ori/
+DiffProxy/compare_ori2/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

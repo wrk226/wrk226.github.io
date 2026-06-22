@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>DiffProxy: Multi-View Human Mesh Recovery via Diffusion-Generated Dense Proxies</title>
+  <meta name="description" content="DiffProxy: Multi-View Human Mesh Recovery via Diffusion-Generated Dense Proxies">
+
+  <!-- ETCH-like typography -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <!-- MathJax (render inline LaTeX like $...$ / \(...\)) -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <!-- ETCH-like layout system (Bulma) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+
+  <!-- Icons (optional, but matches ETCH buttons) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+
+  <style>
+    body { font-family: 'Noto Sans', sans-serif; }
+    .publication-title { font-family: 'Google Sans', 'Noto Sans', sans-serif; }
+    .publication-authors { font-family: 'Google Sans', 'Noto Sans', sans-serif; }
+    .publication-institutions { font-family: 'Google Sans', 'Noto Sans', sans-serif; }
+    .institution-block { display: inline-block; }
+    .eql-cntrb { font-size: smaller; color: #555; }
+    .publication-authors a { color: hsl(204, 86%, 53%) !important; }
+    .publication-authors a:hover { text-decoration: underline; }
+    .link-block a { margin-top: 6px; margin-bottom: 6px; }
+    .link-block .button { display: inline-flex; vertical-align: baseline; }
+
+    /* Teaser spacing close to ETCH */
+    .teaser .hero-body { padding-top: 0; padding-bottom: 3rem; }
+    .teaser { font-family: 'Google Sans', 'Noto Sans', sans-serif; }
+
+    /* DiffProxy pipeline carousel (lightweight, no bootstrap) */
+    .dp-carousel {
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    }
+    .dp-carousel img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .dp-carousel-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 12px 16px;
+      background: #fff;
+    }
+    .dp-dots { display: inline-flex; gap: 10px; }
+    .dp-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #d0d0d0;
+      border: 1px solid #b0b0b0;
+      cursor: pointer;
+    }
+    .dp-dot:hover { background: #bdbdbd; }
+    .dp-dot.is-active { background: #1772d0; border-color: #1772d0; }
+    .dp-nav-btn {
+      border: 0;
+      background: #f5f5f5;
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #363636;
+    }
+    .dp-nav-btn:hover { background: #eeeeee; }
+    .dp-nav-btn:active { transform: translateY(1px); }
+    .dp-nav-btn:focus { outline: 2px solid rgba(23, 114, 208, 0.35); outline-offset: 2px; }
+
+    /* Qualitative results: carousel with buttons + dots (nerfies-like) */
+    .dp-video-carousel {
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+      position: relative;
+    }
+    .dp-video-viewport {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 14px 14px 10px;
+      background: #fff;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth; /* prefer native smooth scrolling when available */
+    }
+    /* Hide scrollbar (still scrollable by touchpad/swipe) */
+    .dp-video-viewport::-webkit-scrollbar { display: none; }
+    .dp-video-viewport { scrollbar-width: none; }
+    .dp-video-track {
+      display: inline-flex;
+      gap: 16px;
+    }
+    .dp-video-item {
+      flex: 0 0 auto;
+      scroll-snap-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dp-video {
+      display: block;
+      width: auto;            /* width follows aspect ratio */
+      height: 280px;          /* enforce consistent height */
+      object-fit: contain;    /* do NOT crop */
+      border-radius: 12px;
+      background: #000;
+      max-width: 100%;
+    }
+    @media (min-width: 1024px) {
+      .dp-video { height: 350px; }
+    }
+
+    /* Comparisons: one video per row (full-width slide) */
+    #dp-cmp-carousel .dp-video-viewport {
+      /* horizontal carousel: keep original aspect ratio without cropping/letterbox */
+      padding: 0; /* no left/right whitespace */
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+    }
+    #dp-cmp-carousel .dp-video-track {
+      display: flex;
+      width: 100%;
+      gap: 0;
+      flex-direction: row;
+    }
+    #dp-cmp-carousel .dp-video-item {
+      flex: 0 0 100%;
+      width: 100%;
+    }
+    #dp-cmp-carousel .dp-video {
+      width: 100%;
+      height: auto; /* let height follow the video's intrinsic aspect ratio */
+      max-width: none;
+      background: transparent;
+    }
+
+    /* Comparisons arrows: rely on global .dp-video-arrow + .is-left/.is-right */
+
+    /* Quantitative table */
+    .dp-table-wrap {
+      position: relative;
+      width: 100%;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+      padding: 10px 10px 8px;
+    }
+    .dp-table-unit {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+    table.dp-metrics-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.72rem;
+    }
+    .dp-metrics-table th,
+    .dp-metrics-table td {
+      padding: 4px 5px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      text-align: center;
+      white-space: nowrap;
+    }
+    .dp-metrics-table th:first-child,
+    .dp-metrics-table td:first-child { text-align: left; }
+    /* Dataset separators: columns 2, 6, 10 (Method | 1st | 2nd | 3rd dataset) */
+    .dp-metrics-table th:nth-child(2),
+    .dp-metrics-table td:nth-child(2),
+    .dp-metrics-table th:nth-child(6),
+    .dp-metrics-table td:nth-child(6),
+    .dp-metrics-table th:nth-child(10),
+    .dp-metrics-table td:nth-child(10) {
+      border-left: 1.5px solid rgba(0, 0, 0, 0.18);
+    }
+    /* For header row with colspan, mark all dataset groups */
+    .dp-metrics-table thead tr:first-child th[colspan] {
+      border-left: 1.5px solid rgba(0, 0, 0, 0.18);
+    }
+    .dp-metrics-table thead th {
+      font-family: 'Google Sans', 'Noto Sans', sans-serif;
+      font-weight: 700;
+      color: #1f2937;
+      background: #fcfcfc;
+    }
+    .dp-metrics-table thead tr:first-child th {
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .dp-metrics-table tbody tr:hover td {
+      background: rgba(0, 0, 0, 0.02);
+    }
+    .dp-metrics-table td.is-best {
+      background: #ffb3b3;
+      font-weight: 700;
+    }
+    .dp-metrics-table td.is-second {
+      background: #ffd8a8;
+      font-weight: 600;
+    }
+    .dp-metrics-table tr.is-ours td:first-child { font-weight: 700; }
+    .dp-metrics-note {
+      color: #6b7280;
+      font-size: 0.75rem;
+      margin-top: 8px;
+    }
+
+    /* Overlay arrows on left/right of the carousel (not under dots) */
+    .dp-video-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      border: 0;
+      background: rgba(245, 245, 245, 0.92);
+      border-radius: 999px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: #363636;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.10);
+      backdrop-filter: blur(6px);
+    }
+    .dp-video-arrow:hover { background: rgba(238, 238, 238, 0.95); }
+    .dp-video-arrow:active { transform: translateY(-50%) translateY(1px); }
+    .dp-video-arrow:focus { outline: 2px solid rgba(23, 114, 208, 0.35); outline-offset: 2px; }
+    .dp-video-arrow.is-left { left: 10px; }
+    .dp-video-arrow.is-right { right: 10px; }
+
+    .dp-video-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 12px 16px;
+      background: #fff;
+    }
+    .dp-video-dots { display: inline-flex; gap: 10px; }
+    .dp-video-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #d0d0d0;
+      border: 1px solid #b0b0b0;
+      cursor: pointer;
+    }
+    .dp-video-dot:hover { background: #bdbdbd; }
+    .dp-video-dot.is-active { background: #1772d0; border-color: #1772d0; }
+
+    /* Synthetic data browser (PPT-like left preview + compare sliders) */
+    .dp-syn-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .dp-syn-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    /* Sidebar as carousel */
+    .dp-syn-carousel {
+      position: relative;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+    }
+    .dp-syn-viewport {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 12px 50px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+    }
+    .dp-syn-viewport::-webkit-scrollbar { display: none; }
+    .dp-syn-viewport { scrollbar-width: none; }
+    .dp-syn-track {
+      display: inline-flex;
+      gap: 10px;
+    }
+    .dp-syn-item {
+      flex: 0 0 auto;
+      scroll-snap-align: center;
+      padding: 4px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background: transparent;
+      cursor: pointer;
+    }
+    .dp-syn-item:hover { background: rgba(0, 0, 0, 0.03); }
+    .dp-syn-item.is-active {
+      background: rgba(23, 114, 208, 0.08);
+      border-color: rgba(23, 114, 208, 0.5);
+    }
+    .dp-syn-thumb {
+      display: block;
+      width: 52px;
+      height: 52px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #000;
+    }
+    .dp-syn-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 5;
+      border: 0;
+      background: rgba(245, 245, 245, 0.92);
+      border-radius: 999px;
+      padding: 8px 10px;
+      cursor: pointer;
+      color: #363636;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+    .dp-syn-arrow:hover { background: rgba(238, 238, 238, 0.95); }
+    .dp-syn-arrow.is-left { left: 8px; }
+    .dp-syn-arrow.is-right { right: 8px; }
+    .dp-syn-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 0 12px;
+      background: #fff;
+    }
+    .dp-syn-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #d0d0d0;
+      border: 1px solid #b0b0b0;
+      cursor: pointer;
+    }
+    .dp-syn-dot:hover { background: #bdbdbd; }
+    .dp-syn-dot.is-active { background: #1772d0; border-color: #1772d0; }
+    .dp-syn-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 1024px) {
+      .dp-syn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .dp-syn-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Compare slider (twentytwenty-style): left shows mesh, right shows image */
+    .dp-compare {
+      background: #000;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    }
+    .dp-compare-inner {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #000;
+      user-select: none;
+      touch-action: none;
+      cursor: ew-resize;
+      overflow: hidden;
+    }
+    .dp-compare-inner img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .dp-compare-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      /* clip from the right: inset(top right bottom left) */
+      clip-path: inset(0 50% 0 0);
+    }
+    .dp-compare-overlay img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .dp-compare-divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #fff;
+      left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .dp-compare-handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.95);
+      border: 3px solid #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dp-compare-handle::before,
+    .dp-compare-handle::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 0;
+      height: 0;
+      border-top: 7px solid transparent;
+      border-bottom: 7px solid transparent;
+      transform: translateY(-50%);
+    }
+    .dp-compare-handle::before {
+      left: 6px;
+      border-right: 8px solid #333;
+    }
+    .dp-compare-handle::after {
+      right: 6px;
+      border-left: 8px solid #333;
+    }
+
+    /* Abstract styling (Up2You-like): light card with left accent bar */
+    .dp-abstract-box {
+      max-width: 58rem;
+      margin-left: auto;
+      margin-right: auto;
+      background: #f9fafb;              /* similar to Tailwind gray-50 */
+      border-radius: 12px;
+      padding: 1.5rem 1.5rem;
+      border-left: 4px solid #3b82f6;   /* Tailwind blue-500 */
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+    }
+    .dp-abstract-box p {
+      font-size: 1.1rem;
+      line-height: 1.7;
+      color: #374151;
+      text-align: justify;
+      text-justify: inter-word;
+      margin: 0;
+    }
+
+    /* ETCH-like caption typography + emphasis */
+    .etch-caption {
+      /* match ETCH page: body uses Noto Sans; titles use Google Sans */
+      font-family: 'Noto Sans', sans-serif;
+      line-height: 1.65;
+      color: #2f2f2f;
+      max-width: 58rem;
+      margin-left: auto;
+      margin-right: auto;
+      font-size: 1rem;
+      text-align: justify;
+      text-justify: inter-word;
+    }
+    .etch-step {
+      font-family: 'Google Sans', 'Noto Sans', sans-serif;
+      font-weight: 700;
+      color: #B03A2E;
+    }
+    .etch-steps {
+      margin-top: 0.4rem;
+    }
+    .etch-step-row {
+      display: grid;
+      grid-template-columns: 2.4em 1fr;
+      column-gap: 0.35em;
+      align-items: start;
+      margin-top: 0.35rem;
+    }
+    .etch-step-row[data-pipeline-slide] { cursor: pointer; }
+    .etch-step-row[data-pipeline-slide]:hover { background: rgba(0, 0, 0, 0.03); border-radius: 8px; }
+    .etch-step-row[data-pipeline-slide]:focus { outline: 2px solid rgba(23, 114, 208, 0.25); outline-offset: 3px; border-radius: 8px; }
+    .etch-step-label {
+      text-align: right;
+      white-space: nowrap;
+      padding-top: 0.02rem;
+    }
+    .etch-step-text {
+      text-align: justify;
+      text-justify: inter-word;
+    }
+    .etch-math {
+      /* Let MathJax typeset; keep surrounding emphasis readable */
+      white-space: nowrap;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Hero header (ETCH-like) -->
+  <section class="hero" style="background-color: #ff9d2e00;">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-2 publication-title">
+              <span style="background: linear-gradient(to right, #2f80ed, #9b51e0); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-size: 3.3rem;">DiffProxy</span><br>
+              <span style="font-size: 1.9rem;">Multi-View Human Mesh Recovery via Diffusion-Generated <span style="white-space: nowrap;">Dense Proxies</span></span>
+            </h1>
+
+            <div class="is-size-5 publication-authors mt-4 mb-2" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+              <span class="author-block"><a href="https://wrk226.github.io" target="_blank" rel="noopener noreferrer">Renke Wang</a><sup>1</sup>,</span>
+              <span class="author-block"><a href="https://jessezhang92.github.io/" target="_blank" rel="noopener noreferrer">Zhenyu Zhang</a><sup>2*</sup>,</span>
+              <span class="author-block"><a href="https://tyshiwo.github.io/" target="_blank" rel="noopener noreferrer">Ying Tai</a><sup>2</sup>,</span>
+              <span class="author-block"><a href="https://sites.google.com/view/junlineu/" target="_blank" rel="noopener noreferrer">Jun Li</a><sup>1*</sup>,</span>
+              <span class="author-block"><a href="https://www.patternrecognition.asia/jian/" target="_blank" rel="noopener noreferrer">Jian Yang</a><sup>1*</sup></span>
+            </div>
+
+            <div class="is-size-5 publication-institutions mb-3" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+              <span class="institution-block"><sup>1</sup>PCA Lab, Nanjing University of Science and Technology</span>
+              <span class="institution-block"><sup>2</sup>Nanjing University, School of Intelligent Science and Technology</span>
+            </div>
+
+            <div class="has-text-centered mb-4" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+              <span class="eql-cntrb"><sup>*</sup>Corresponding authors</span>
+            </div>
+
+            <div class="publication-links">
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2601.02267" target="_blank" rel="noopener noreferrer" class="button is-normal is-rounded is-dark">
+                  <span class="icon"><i class="ai ai-arxiv"></i></span>
+                  <span>Paper</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://github.com/wrk226/DiffProxy" target="_blank" rel="noopener noreferrer" class="button is-normal is-rounded is-dark">
+                  <span class="icon"><i class="fab fa-github"></i></span>
+                  <span>Code</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Teaser image + caption (ETCH-like) -->
+  <section class="hero teaser">
+    <div class="container is-max-desktop">
+      <div class="hero-body">
+        <img src="./DiffProxy/title-v2.1.png" alt="DiffProxy teaser" width="100%">
+        <h2 class="subtitle has-text-justified is-5 mt-3">
+          <p>
+            Existing human mesh recovery methods face distinct challenges. <b style="color:#d28a2d;">(A)</b> End-to-end methods (SMPLest-X, HeatFormer) produce imprecise image-mesh alignment; <b style="color:#8a63b8;">(B)</b> keypoint-based fitting (EasyMoCap) is sparse and unstable under challenging conditions; <b style="color:#c9585a;">(C)</b> prior dense correspondence predictors (DensePose) produce noisy and incomplete surface mappings. We introduce DiffProxy, which uses a diffusion model trained on synthetic data to predict accurate dense pixel-to-surface proxies, then fits SMPL-X against them via a unified reprojection objective, achieving precise alignment across diverse real-world scenarios.
+          </p>
+        </h2>
+      </div>
+    </div>
+  </section>
+
+  <!-- Method Overview + pipeline (static) -->
+  <section class="section" style="background-color: #f5f5f5;">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Method Overview</h2>
+
+      <div class="columns is-centered">
+        <div class="column">
+          <div class="dp-carousel">
+            <img id="dp-pipeline-img" src="./DiffProxy/pipeline+architecture-v1.13.png" alt="DiffProxy pipeline">
+          </div>
+        </div>
+      </div>
+
+      <div class="content mt-4">
+        <p class="etch-caption">
+          Method overview. The proxy generator first produces initial body proxies; the segmentation component <span class="etch-math">$\mathbf{P}_{v,\mathrm{init}}^{\mathrm{seg}}$</span> is then used to crop and enlarge hand regions for a second pass (hand refinement). Test-time scaling then draws <span class="etch-math">$K$</span> stochastic samples for both body and hand proxies, aggregates them, and derives per-pixel uncertainty weight maps <span class="etch-math">$\mathbf{W}_v$</span>. Finally, SMPL-X parameters are recovered by minimizing an uncertainty-weighted reprojection objective <span class="etch-math">$\mathcal{L}_{\mathrm{reproj}}$</span>.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Architecture</h2>
+      <div class="columns is-centered">
+        <div class="column">
+          <div class="dp-carousel">
+            <img id="dp-arch-img" src="./DiffProxy/architecture-v1.2.png" alt="DiffProxy architecture">
+          </div>
+        </div>
+      </div>
+      <div class="content mt-4">
+        <p class="etch-caption">
+          Diffusion-based proxy generator architecture. Our model is built on Stable Diffusion~2.1 with a frozen UNet backbone, equipped with three conditioning signals ($\mathbf{c}_{\text{text}}$, $\mathbf{c}_{\text{T2I}}$, $\mathbf{c}_{\text{DINO}}$) and four trainable attention modules ($\mathcal{A}_{\mathrm{text}}$, $\mathcal{A}_{\mathrm{img}}$, $\mathcal{A}_{\mathrm{cm}}$, $\mathcal{A}_{\mathrm{epi}}$) for multi-view consistent proxy generation.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Synthetic Data -->
+  <section class="section" style="background-color: #f5f5f5;">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Synthetic Data</h2>
+      <div class="dp-syn-layout">
+        <div class="dp-syn-main">
+          <div class="dp-syn-grid" id="dp-syn-grid" aria-label="Synthetic views compare grid"></div>
+        </div>
+        <div class="dp-syn-carousel" id="dp-syn-carousel">
+          <button class="dp-syn-arrow is-left" id="dp-syn-prev" type="button" aria-label="Previous subject">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+          <button class="dp-syn-arrow is-right" id="dp-syn-next" type="button" aria-label="Next subject">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+          <div class="dp-syn-viewport">
+            <div class="dp-syn-track" id="dp-syn-track"></div>
+            </div>
+          <div class="dp-syn-dots" id="dp-syn-dots"></div>
+          </div>
+        </div>
+      <p class="etch-caption mt-5">
+        Our synthetic dataset contains <b>105,487 clothed SMPL-X subjects</b> rendered into <b>843,896 images</b> across eight randomized views, featuring HDR lighting, realistic occlusions, and physics-based clothing. The dataset provides <b>pixel-perfect SMPL-X proxy annotations</b>, eliminating annotation noise inherent in real-world datasets and enabling strong generalization to real-world scenarios.
+      </p>
+      </div>
+  </section>
+
+  <!-- Qualitative Results -->
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Our Results</h2>
+      <div class="dp-video-carousel" id="dp-video-carousel" aria-label="Qualitative results carousel">
+        <button class="dp-video-arrow is-left" id="dp-video-prev" type="button" aria-label="Previous video">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+        <button class="dp-video-arrow is-right" id="dp-video-next" type="button" aria-label="Next video">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+        <div class="dp-video-viewport">
+          <div class="dp-video-track" id="dp-video-track">
+            <div class="dp-video-item">
+              <video class="dp-video" autoplay controls muted loop playsinline preload="metadata">
+                <source src="./DiffProxy/assets/3dhp-seq.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" autoplay controls muted loop playsinline preload="metadata">
+                <source src="./DiffProxy/assets/4ddress-seq2.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" autoplay controls muted loop playsinline preload="metadata">
+                <source src="./DiffProxy/assets/4ddress-seq4-etch.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" autoplay controls muted loop playsinline preload="metadata">
+                <source src="./DiffProxy/assets/moyo-seq5.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" autoplay controls muted loop playsinline preload="metadata">
+                <source src="./DiffProxy/assets/rich-seq.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" autoplay controls muted loop playsinline preload="metadata">
+                <source src="./DiffProxy/assets/rich-seq2.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+        <div class="dp-video-controls">
+          <div class="dp-video-dots" id="dp-video-dots" aria-label="Video indicators"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quantitative Results -->
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Quantitative Comparisons</h2>
+
+      <div class="dp-table-wrap">
+        <table class="dp-metrics-table" data-highlight="min2">
+          <thead>
+            <tr>
+              <th></th>
+              <th colspan="4" style="text-align:center;">3dhp</th>
+              <th colspan="4" style="text-align:center;">rich</th>
+              <th colspan="4" style="text-align:center;">behave</th>
+            </tr>
+            <tr>
+              <th>Method</th>
+              <th>PA-MPJPE</th><th>MPJPE</th><th>PA-MPVPE</th><th>MPVPE</th>
+              <th>PA-MPJPE</th><th>MPJPE</th><th>PA-MPVPE</th><th>MPVPE</th>
+              <th>PA-MPJPE</th><th>MPJPE</th><th>PA-MPVPE</th><th>MPVPE</th>
+            </tr>
+          </thead>
+            <tbody>
+              <tr>
+                <td><a href="https://github.com/SMPLCap/SMPLest-X" target="_blank">SMPLest-X</a></td>
+                <td data-val="32.5">32.5<sup>*</sup></td><td data-val="48.1">48.1<sup>*</sup></td><td data-val="46.6">46.6<sup>*</sup></td><td data-val="62.3">62.3<sup>*</sup></td>
+                <td data-val="31.8">31.8<sup>*</sup></td><td data-val="67.6">67.6<sup>*</sup></td><td data-val="40.3">40.3<sup>*</sup></td><td data-val="81.1">81.1<sup>*</sup></td>
+                <td data-val="30.0">30.0<sup>*</sup></td><td data-val="48.6">48.6<sup>*</sup></td><td data-val="43.5">43.5<sup>*</sup></td><td data-val="63.6">63.6<sup>*</sup></td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/fanegg/Human3R" target="_blank">Human3R</a></td>
+                <td data-val="53.1">53.1</td><td data-val="84.3">84.3</td><td data-val="67.7">67.7</td><td data-val="104.1">104.1</td>
+                <td data-val="52.1">52.1</td><td data-val="101.1">101.1</td><td data-val="64.4">64.4</td><td data-val="116.9">116.9</td>
+                <td data-val="38.3">38.3</td><td data-val="85.0">85.0</td><td data-val="53.8">53.8</td><td data-val="102.3">102.3</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/facebookresearch/sam-3d-body" target="_blank">sam3dbody</a></td>
+                <td data-val="40.3">40.3</td><td data-val="57.6">57.6</td><td data-val="54.0">54.0</td><td data-val="74.0">74.0</td>
+                <td data-val="30.6">30.6</td><td data-val="48.6">48.6</td><td data-val="37.9">37.9</td><td data-val="57.7">57.7</td>
+                <td data-val="28.1">28.1</td><td data-val="41.6">41.6</td><td data-val="42.1">42.1</td><td data-val="54.7">54.7</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/XiaobenLi00/U-HMR" target="_blank">U-HMR</a></td>
+                <td data-val="67.3">67.3<sup>*</sup></td><td data-val="142.9">142.9<sup>*</sup></td><td data-val="78.5">78.5<sup>*</sup></td><td data-val="164.2">164.2<sup>*</sup></td>
+                <td data-val="55.5">55.5</td><td data-val="134.9">134.9</td><td data-val="67.8">67.8</td><td data-val="159.3">159.3</td>
+                <td data-val="46.1">46.1</td><td data-val="118.7">118.7</td><td data-val="51.9">51.9</td><td data-val="135.0">135.0</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/AbsterZhu/MUC" target="_blank">MUC</a></td>
+                <td data-val="40.2">40.2</td><td>-</td><td data-val="51.3">51.3</td><td>-</td>
+                <td data-val="35.7">35.7<sup>*</sup></td><td>-</td><td data-val="42.7">42.7<sup>*</sup></td><td>-</td>
+                <td data-val="28.7">28.7</td><td>-</td><td data-val="41.8">41.8</td><td>-</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/kyotovision-public/HeatFormer" target="_blank">HeatFormer</a></td>
+                <td data-val="29.2">29.2<sup>*</sup></td><td data-val="49.9">49.9<sup>*</sup></td><td data-val="34.7">34.7<sup>*</sup></td><td data-val="53.3">53.3<sup>*</sup></td>
+                <td data-val="40.1">40.1</td><td data-val="80.1">80.1</td><td data-val="52.9">52.9</td><td data-val="93.8">93.8</td>
+                <td data-val="33.4">33.4</td><td data-val="70.2">70.2</td><td data-val="47.7">47.7</td><td data-val="80.5">80.5</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/zju3dv/EasyMocap" target="_blank">EasyMoCap</a></td>
+                <td data-val="34.3">34.3</td><td data-val="43.7">43.7</td><td data-val="43.2">43.2</td><td data-val="51.5">51.5</td>
+                <td data-val="31.2">31.2</td><td data-val="49.8">49.8</td><td data-val="44.2">44.2</td><td data-val="60.3">60.3</td>
+                <td data-val="21.8">21.8</td><td data-val="29.6">29.6</td><td data-val="35.1">35.1</td><td data-val="40.4">40.4</td>
+              </tr>
+              <tr class="is-ours">
+                <td><b>Ours</b></td>
+                <td data-val="32.8">32.8</td><td data-val="41.1">41.1</td><td data-val="44.7">44.7</td><td data-val="50.9">50.9</td>
+                <td data-val="24.2">24.2</td><td data-val="33.7">33.7</td><td data-val="28.9">28.9</td><td data-val="35.1">35.1</td>
+                <td data-val="22.8">22.8</td><td data-val="32.7">32.7</td><td data-val="31.3">31.3</td><td data-val="39.9">39.9</td>
+              </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="height: 20px;"></div>
+
+      <div class="dp-table-wrap">
+        <span class="dp-table-unit">Unit: mm</span>
+        <table class="dp-metrics-table" data-highlight="min2">
+          <thead>
+            <tr>
+              <th></th>
+              <th colspan="4" style="text-align:center;">moyo</th>
+              <th colspan="4" style="text-align:center;">4ddress</th>
+              <th colspan="4" style="text-align:center;">4ddress-partial</th>
+            </tr>
+            <tr>
+              <th>Method</th>
+              <th>PA-MPJPE</th><th>MPJPE</th><th>PA-MPVPE</th><th>MPVPE</th>
+              <th>PA-MPJPE</th><th>MPJPE</th><th>PA-MPVPE</th><th>MPVPE</th>
+              <th>PA-MPJPE</th><th>MPJPE</th><th>PA-MPVPE</th><th>MPVPE</th>
+            </tr>
+          </thead>
+            <tbody>
+              <tr>
+                <td><a href="https://github.com/SMPLCap/SMPLest-X" target="_blank">SMPLest-X</a></td>
+                <td data-val="45.6">45.6<sup>*</sup></td><td data-val="63.3">63.3<sup>*</sup></td><td data-val="62.1">62.1<sup>*</sup></td><td data-val="81.4">81.4<sup>*</sup></td>
+                <td data-val="34.8">34.8</td><td data-val="52.1">52.1</td><td data-val="52.4">52.4</td><td data-val="70.2">70.2</td>
+                <td data-val="72.2">72.2</td><td data-val="101.7">101.7</td><td data-val="111.3">111.3</td><td data-val="140.6">140.6</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/fanegg/Human3R" target="_blank">Human3R</a></td>
+                <td data-val="65.0">65.0</td><td data-val="87.8">87.8</td><td data-val="81.6">81.6</td><td data-val="107.6">107.6</td>
+                <td data-val="30.0">30.0</td><td data-val="52.4">52.4</td><td data-val="42.4">42.4</td><td data-val="66.7">66.7</td>
+                <td data-val="72.3">72.3</td><td data-val="117.6">117.6</td><td data-val="103.5">103.5</td><td data-val="153.9">153.9</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/facebookresearch/sam-3d-body" target="_blank">sam3dbody</a></td>
+                <td data-val="34.1">34.1</td><td data-val="47.8">47.8</td><td data-val="46.8">46.8</td><td data-val="61.8">61.8</td>
+                <td data-val="28.1">28.1</td><td data-val="41.8">41.8</td><td data-val="42.7">42.7</td><td data-val="56.1">56.1</td>
+                <td data-val="42.4">42.4</td><td data-val="56.8">56.8</td><td data-val="65.0">65.0</td><td data-val="79.7">79.7</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/XiaobenLi00/U-HMR" target="_blank">U-HMR</a></td>
+                <td data-val="88.3">88.3</td><td data-val="177.7">177.7</td><td data-val="104.9">104.9</td><td data-val="209.7">209.7</td>
+                <td data-val="42.1">42.1</td><td data-val="80.3">80.3</td><td data-val="52.6">52.6</td><td data-val="98.8">98.8</td>
+                <td data-val="65.2">65.2</td><td data-val="136.1">136.1</td><td data-val="87.2">87.2</td><td data-val="175.2">175.2</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/AbsterZhu/MUC" target="_blank">MUC</a></td>
+                <td data-val="62.8">62.8</td><td>-</td><td data-val="76.0">76.0</td><td>-</td>
+                <td data-val="33.2">33.2</td><td>-</td><td data-val="49.2">49.2</td><td>-</td>
+                <td data-val="60.1">60.1</td><td>-</td><td data-val="92.9">92.9</td><td>-</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/kyotovision-public/HeatFormer" target="_blank">HeatFormer</a></td>
+                <td data-val="67.3">67.3</td><td data-val="126.9">126.9</td><td data-val="79.6">79.6</td><td data-val="123.6">123.6</td>
+                <td data-val="43.4">43.4</td><td data-val="73.3">73.3</td><td data-val="61.6">61.6</td><td data-val="90.2">90.2</td>
+                <td data-val="143.8">143.8</td><td data-val="291.6">291.6</td><td data-val="175.2">175.2</td><td data-val="327.0">327.0</td>
+              </tr>
+              <tr>
+                <td><a href="https://github.com/zju3dv/EasyMocap" target="_blank">EasyMoCap</a></td>
+                <td data-val="31.4">31.4</td><td data-val="41.2">41.2</td><td data-val="44.8">44.8</td><td data-val="51.6">51.6</td>
+                <td data-val="19.9">19.9</td><td data-val="24.9">24.9</td><td data-val="31.8">31.8</td><td data-val="35.3">35.3</td>
+                <td data-val="48.2">48.2</td><td data-val="94.8">94.8</td><td data-val="69.8">69.8</td><td data-val="119.4">119.4</td>
+              </tr>
+              <tr class="is-ours">
+                <td><b>Ours</b></td>
+                <td data-val="28.3">28.3</td><td data-val="32.4">32.4</td><td data-val="35.2">35.2</td><td data-val="38.8">38.8</td>
+                <td data-val="16.6">16.6</td><td data-val="20.5">20.5</td><td data-val="23.3">23.3</td><td data-val="25.6">25.6</td>
+                <td data-val="27.6">27.6</td><td data-val="31.6">31.6</td><td data-val="41.3">41.3</td><td data-val="43.1">43.1</td>
+              </tr>
+          </tbody>
+        </table>
+        <div class="dp-metrics-note"><sup>*</sup> Method was trained on the corresponding dataset.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparisons -->
+  <section class="section" style="background-color: #f5f5f5;">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Qualitative Comparisons</h2>
+      <div class="dp-video-carousel" id="dp-cmp-carousel" aria-label="Comparisons carousel">
+        <button class="dp-video-arrow is-left" id="dp-cmp-prev" type="button" aria-label="Previous comparison">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <button class="dp-video-arrow is-right" id="dp-cmp-next" type="button" aria-label="Next comparison">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+        <div class="dp-video-viewport">
+          <div class="dp-video-track" id="dp-cmp-track">
+            <!-- Showcase: one sample from each dataset -->
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0028.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0000.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/4ddress_concat_2x5_sid0000.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/4ddress_partial_concat_2x5_sid0027.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/behave_concat_2x5_sid0068.mp4" type="video/mp4">
+              </video>
+            </div>
+
+            <!-- Remaining: RICH -->
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0029.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0034.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0038.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0041.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0046.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0052.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/rich_concat_2x5_sid0085.mp4" type="video/mp4">
+              </video>
+            </div>
+
+            <!-- Remaining: MOYO -->
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0002.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0003.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0005.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0011.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0015.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0022.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0033.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/moyo_concat_2x5_sid0054.mp4" type="video/mp4">
+              </video>
+            </div>
+
+            <!-- Remaining: 4D-DRESS -->
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/4ddress_concat_2x5_sid0006.mp4" type="video/mp4">
+              </video>
+            </div>
+
+            <!-- Remaining: 4D-DRESS Partial -->
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/4ddress_partial_concat_2x5_sid0029.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/4ddress_partial_concat_2x5_sid0050.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/4ddress_partial_concat_2x5_sid0088.mp4" type="video/mp4">
+              </video>
+            </div>
+
+            <!-- Remaining: BEHAVE -->
+            <div class="dp-video-item">
+              <video class="dp-video" controls muted loop playsinline preload="none" data-lazy-video>
+                <source data-src="./DiffProxy/compare/behave_concat_2x5_sid0092.mp4" type="video/mp4">
+              </video>
+            </div>
+
+          </div>
+        </div>
+        <div class="dp-video-controls">
+          <div class="dp-video-dots" id="dp-cmp-dots" aria-label="Comparison indicators"></div>
+        </div>
+      </div>
+      <p class="content has-text-justified" style="font-family: 'Google Sans', 'Noto Sans', sans-serif; font-size: 1rem; color: #4a4a4a; margin-top: 1.5rem;">
+        Benefiting from the strong visual priors of diffusion models and training exclusively on synthetic data, our method achieves substantial improvements over prior approaches. In many cases, our results exhibit tighter image-mesh alignment and stronger robustness under challenging real-world conditions.
+      </p>
+    </div>
+  </section>
+
+  <!-- BibTeX -->
+  <section class="section">
+    <div class="container is-max-desktop content">
+      <h2 class="title is-3">BibTeX</h2>
+      <pre style="background: #f5f5f5; border-radius: 8px; padding: 16px; font-size: 0.8rem; overflow-x: auto;"><code>@article{wang2026diffproxy,
+  title={DiffProxy: Multi-View Human Mesh Recovery via Diffusion-Generated Dense Proxies},
+  author={Wang, Renke and Zhang, Zhenyu and Tai, Ying and Li, Jun and Yang, Jian},
+  journal={arXiv preprint arXiv:2601.02267},
+  year={2026}
+}</code></pre>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      // Fail fast if pipeline/architecture figures are missing
+      var pipelineImg = document.getElementById('dp-pipeline-img');
+      var archImg = document.getElementById('dp-arch-img');
+      if (!pipelineImg) throw new Error('Pipeline figure DOM not found.');
+      if (!archImg) throw new Error('Architecture figure DOM not found.');
+
+      // Synthetic Data: carousel + per-view compare slider (mesh vs image)
+      var synCarousel = document.getElementById('dp-syn-carousel');
+      var synTrack = document.getElementById('dp-syn-track');
+      var synDots = document.getElementById('dp-syn-dots');
+      var synPrev = document.getElementById('dp-syn-prev');
+      var synNext = document.getElementById('dp-syn-next');
+      var synViewport = synCarousel.querySelector('.dp-syn-viewport');
+      var synGrid = document.getElementById('dp-syn-grid');
+      if (!synCarousel || !synTrack || !synDots || !synPrev || !synNext || !synViewport || !synGrid) {
+        throw new Error('Synthetic data DOM not found.');
+      }
+
+      var SYN_SUBJECTS = [
+        '0000','0001','0002','0003','0004','0005','0006','0007','0008',
+        '0009','0010','0011','0012','0013','0014','0015','0016'
+      ];
+      var SYN_VIEWS = ['00','01','02','03','04','05','06','07'];
+      var SYN_BASE = './DiffProxy/synthetic_data';
+
+      function imgPath(kind, subject, view) {
+        return SYN_BASE + '/' + kind + '/' + subject + '_' + view + '.jpg';
+      }
+
+      function attachFailFast(imgEl) {
+        imgEl.addEventListener('error', function () {
+          throw new Error('Failed to load synthetic image: ' + imgEl.src);
+        });
+      }
+
+      function setComparePosition(compareEl, pct) {
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        var overlay = compareEl.querySelector('.dp-compare-overlay');
+        var divider = compareEl.querySelector('.dp-compare-divider');
+        var handle = compareEl.querySelector('.dp-compare-handle');
+        if (!overlay || !divider || !handle) {
+          throw new Error('Compare DOM not found.');
+        }
+        // clip-path: inset(top right bottom left)
+        // clip from the right side: (100 - pct)% to reveal left pct% of overlay (image)
+        overlay.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
+        divider.style.left = pct + '%';
+        handle.style.left = pct + '%';
+      }
+
+      function buildCompareTile(subject, view) {
+        var wrap = document.createElement('div');
+        wrap.className = 'dp-compare';
+
+        var inner = document.createElement('div');
+        inner.className = 'dp-compare-inner';
+
+        // base layer: mesh (visible on the RIGHT when slider moves left)
+        var meshImg = document.createElement('img');
+        meshImg.alt = 'mesh ' + subject + '_' + view;
+        meshImg.src = imgPath('mesh', subject, view);
+        attachFailFast(meshImg);
+
+        // overlay layer: image (visible on the LEFT, revealed as slider moves right)
+        var overlay = document.createElement('div');
+        overlay.className = 'dp-compare-overlay';
+
+        var imgImg = document.createElement('img');
+        imgImg.alt = 'image ' + subject + '_' + view;
+        imgImg.src = imgPath('image', subject, view);
+        attachFailFast(imgImg);
+
+        overlay.appendChild(imgImg);
+
+        var divider = document.createElement('div');
+        divider.className = 'dp-compare-divider';
+
+        var handle = document.createElement('div');
+        handle.className = 'dp-compare-handle';
+
+        inner.appendChild(meshImg);
+        inner.appendChild(overlay);
+        inner.appendChild(divider);
+        inner.appendChild(handle);
+
+        // Drag on the image itself (pointer events)
+        inner.addEventListener('pointerdown', function (ev) {
+          ev.preventDefault();
+          inner.setPointerCapture(ev.pointerId);
+          function updateFromEvent(e) {
+            var rect = inner.getBoundingClientRect();
+            var x = e.clientX - rect.left;
+            var pct = (x / rect.width) * 100;
+            setComparePosition(wrap, pct);
+          }
+          updateFromEvent(ev);
+          function onMove(e) { updateFromEvent(e); }
+          function onUp(e) {
+            try { inner.releasePointerCapture(e.pointerId); } catch (_) {}
+            inner.removeEventListener('pointermove', onMove);
+            inner.removeEventListener('pointerup', onUp);
+            inner.removeEventListener('pointercancel', onUp);
+          }
+          inner.addEventListener('pointermove', onMove);
+          inner.addEventListener('pointerup', onUp);
+          inner.addEventListener('pointercancel', onUp);
+        });
+
+        wrap.appendChild(inner);
+        setComparePosition(wrap, 50);
+        return wrap;
+      }
+
+      function renderSubject(subject) {
+        synGrid.innerHTML = '';
+        for (var i = 0; i < SYN_VIEWS.length; i++) {
+          synGrid.appendChild(buildCompareTile(subject, SYN_VIEWS[i]));
+        }
+      }
+
+      // Build carousel items (thumbnails)
+      var synItems = [];
+      var synOriginalCount = SYN_SUBJECTS.length;
+      var synIndex = 0;
+
+      function buildCarouselItems() {
+        synTrack.innerHTML = '';
+        for (var i = 0; i < SYN_SUBJECTS.length; i++) {
+          (function (subject, idx) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dp-syn-item';
+            btn.setAttribute('data-subject', subject);
+            btn.setAttribute('data-index', idx);
+            btn.setAttribute('aria-label', 'Select subject ' + subject);
+
+            var thumb = document.createElement('img');
+            thumb.className = 'dp-syn-thumb';
+            thumb.alt = 'subject ' + subject + ' preview';
+            thumb.src = imgPath('image', subject, '00');
+            attachFailFast(thumb);
+
+            btn.appendChild(thumb);
+            btn.addEventListener('click', function () {
+              setSynActive(idx, 'smooth');
+            });
+            synTrack.appendChild(btn);
+          })(SYN_SUBJECTS[i], i);
+        }
+        synItems = synTrack.querySelectorAll('.dp-syn-item');
+
+        // Clone first and last for infinite loop
+        if (synItems.length > 0) {
+          var firstClone = synItems[0].cloneNode(true);
+          var lastClone = synItems[synItems.length - 1].cloneNode(true);
+          firstClone.setAttribute('data-clone', 'first');
+          lastClone.setAttribute('data-clone', 'last');
+          firstClone.addEventListener('click', function () { setSynActive(0, 'smooth'); });
+          lastClone.addEventListener('click', function () { setSynActive(synOriginalCount - 1, 'smooth'); });
+          synTrack.insertBefore(lastClone, synItems[0]);
+          synTrack.appendChild(firstClone);
+          synItems = synTrack.querySelectorAll('.dp-syn-item');
+        }
+      }
+
+      function buildSynDots() {
+        synDots.innerHTML = '';
+        for (var i = 0; i < synOriginalCount; i++) {
+          (function (idx) {
+            var dot = document.createElement('button');
+            dot.type = 'button';
+            dot.className = 'dp-syn-dot' + (idx === 0 ? ' is-active' : '');
+            dot.setAttribute('aria-label', 'Go to subject ' + (idx + 1));
+            dot.addEventListener('click', function () { setSynActive(idx, 'smooth'); });
+            synDots.appendChild(dot);
+          })(i);
+        }
+      }
+
+      function synDomIndex(logicalIdx) {
+        return logicalIdx + 1; // +1 because of lastClone at front
+      }
+
+      function getSynScrollTarget(domIdx) {
+        var viewportRect = synViewport.getBoundingClientRect();
+        var itemRect = synItems[domIdx].getBoundingClientRect();
+        var viewportCenter = viewportRect.left + viewportRect.width / 2;
+        var itemCenter = itemRect.left + itemRect.width / 2;
+        return synViewport.scrollLeft + (itemCenter - viewportCenter);
+      }
+
+      var synAnimRaf = null;
+      function synSmoothScroll(targetLeft, duration, callback) {
+        if (synAnimRaf) { window.cancelAnimationFrame(synAnimRaf); synAnimRaf = null; }
+        var start = synViewport.scrollLeft;
+        var change = targetLeft - start;
+        if (duration === 0 || change === 0) {
+          synViewport.scrollLeft = targetLeft;
+          if (callback) callback();
+          return;
+        }
+        var prevSnap = synViewport.style.scrollSnapType;
+        synViewport.style.scrollSnapType = 'none';
+        var startTime = null;
+        function ease(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2; }
+        function step(ts) {
+          if (!startTime) startTime = ts;
+          var p = Math.min((ts - startTime) / duration, 1);
+          synViewport.scrollLeft = start + change * ease(p);
+          if (p < 1) {
+            synAnimRaf = window.requestAnimationFrame(step);
+          } else {
+            synViewport.style.scrollSnapType = prevSnap;
+            synAnimRaf = null;
+            if (callback) callback();
+          }
+        }
+        synAnimRaf = window.requestAnimationFrame(step);
+      }
+
+      function setSynActive(logicalIdx, behavior) {
+        var wasAtClone = false;
+        // Handle wrapping
+        if (logicalIdx < 0) {
+          logicalIdx = synOriginalCount - 1;
+          wasAtClone = true;
+        } else if (logicalIdx >= synOriginalCount) {
+          logicalIdx = 0;
+          wasAtClone = true;
+        }
+        synIndex = logicalIdx;
+
+        // Update dots
+        var dots = synDots.querySelectorAll('.dp-syn-dot');
+        for (var d = 0; d < dots.length; d++) {
+          dots[d].classList.toggle('is-active', d === synIndex);
+        }
+
+        // Update item highlight
+        for (var i = 0; i < synItems.length; i++) {
+          var isClone = synItems[i].hasAttribute('data-clone');
+          var itemIdx = parseInt(synItems[i].getAttribute('data-index'), 10);
+          synItems[i].classList.toggle('is-active', !isClone && itemIdx === synIndex);
+        }
+
+        // Render the subject content
+        renderSubject(SYN_SUBJECTS[synIndex]);
+
+        // Scroll to the item
+        var domIdx = synDomIndex(synIndex);
+        var targetLeft = getSynScrollTarget(domIdx);
+        var dur = behavior === 'smooth' ? 280 : 0;
+
+        if (wasAtClone && behavior === 'smooth') {
+          // First scroll to the clone, then instantly jump to the real item
+          var cloneDomIdx = logicalIdx === 0 ? synItems.length - 1 : 0;
+          var cloneTarget = getSynScrollTarget(cloneDomIdx);
+          synSmoothScroll(cloneTarget, dur, function () {
+            synViewport.style.scrollSnapType = 'none';
+            synViewport.scrollLeft = targetLeft;
+            synViewport.style.scrollSnapType = '';
+          });
+        } else {
+          synSmoothScroll(targetLeft, dur);
+        }
+      }
+
+      buildCarouselItems();
+      buildSynDots();
+      setSynActive(0, 'auto');
+
+      synPrev.addEventListener('click', function () { setSynActive(synIndex - 1, 'smooth'); });
+      synNext.addEventListener('click', function () { setSynActive(synIndex + 1, 'smooth'); });
+
+      // Qualitative Results: carousel logic (buttons + dots), fail fast on missing DOM/assets
+      var vCarousel = document.getElementById('dp-video-carousel');
+      var vTrack = document.getElementById('dp-video-track');
+      var vDots = document.getElementById('dp-video-dots');
+      var vPrev = document.getElementById('dp-video-prev');
+      var vNext = document.getElementById('dp-video-next');
+      var vViewport = vCarousel.querySelector('.dp-video-viewport');
+      if (!vCarousel || !vTrack || !vDots || !vPrev || !vNext) {
+        throw new Error('Qualitative video carousel DOM not found.');
+      }
+      if (!vViewport) {
+        throw new Error('Qualitative video viewport DOM not found.');
+      }
+
+      var vItems = vTrack.querySelectorAll('.dp-video-item');
+      if (!vItems || vItems.length === 0) {
+        throw new Error('No qualitative videos found in carousel.');
+      }
+
+      // Infinite loop (nerfies-like): clone tail/head so the carousel is "circular".
+      var vOriginalCount = vItems.length;
+      var vOriginalItems = Array.prototype.slice.call(vItems);
+      var vFirstClone = vOriginalItems[0].cloneNode(true);
+      var vLastClone = vOriginalItems[vOriginalCount - 1].cloneNode(true);
+      vFirstClone.setAttribute('data-clone', 'first');
+      vLastClone.setAttribute('data-clone', 'last');
+      vTrack.insertBefore(vLastClone, vOriginalItems[0]);
+      vTrack.appendChild(vFirstClone);
+
+      // Re-query items after cloning: [lastClone, ...originals..., firstClone]
+      vItems = vTrack.querySelectorAll('.dp-video-item');
+
+      // Fail fast if any qualitative video fails to load (including clones)
+      var vEls = vTrack.querySelectorAll('video');
+      for (var vv = 0; vv < vEls.length; vv++) {
+        (function (videoEl) {
+          videoEl.addEventListener('error', function () {
+            var srcEl = videoEl.querySelector('source');
+            var src = srcEl ? srcEl.src : '(unknown)';
+            throw new Error('Failed to load qualitative video: ' + src);
+          });
+        })(vEls[vv]);
+      }
+
+      // logical index in [0..vOriginalCount-1]
+      var vIndex = 0;
+
+      function clampIndex(i) {
+        if (i < 0) return 0;
+        var maxI = vOriginalCount - 1;
+        if (i > maxI) return maxI;
+        return i;
+      }
+
+      // Map logical index -> DOM index in vItems: +1 because vItems[0] is lastClone
+      function domIndexFromLogical(i) {
+        return i + 1;
+      }
+      function logicalFromDomIndex(domIdx) {
+        if (domIdx === 0) return vOriginalCount - 1;            // lastClone
+        if (domIdx === vOriginalCount + 1) return 0;             // firstClone
+        return domIdx - 1;                                       // real items
+      }
+
+      function getTargetScrollLeftForDomIndex(domIdx) {
+        var viewportRect = vViewport.getBoundingClientRect();
+        var itemRect = vItems[domIdx].getBoundingClientRect();
+        var viewportCenter = viewportRect.left + viewportRect.width / 2;
+        var itemCenter = itemRect.left + itemRect.width / 2;
+        var delta = itemCenter - viewportCenter;
+        return vViewport.scrollLeft + delta;
+      }
+
+      var vAnimRaf = null;
+      function cancelVideoScrollAnim() {
+        if (vAnimRaf !== null) {
+          window.cancelAnimationFrame(vAnimRaf);
+          vAnimRaf = null;
+        }
+      }
+
+      function smoothScrollTo(left, behavior, onDone) {
+        cancelVideoScrollAnim();
+
+        // Clamp into scrollable range
+        var maxLeft = vViewport.scrollWidth - vViewport.clientWidth;
+        if (maxLeft < 0) maxLeft = 0;
+        if (left < 0) left = 0;
+        if (left > maxLeft) left = maxLeft;
+
+        var start = vViewport.scrollLeft;
+        var change = left - start;
+        var duration = behavior === 'smooth' ? 320 : 0;
+        if (duration === 0 || change === 0) {
+          vViewport.scrollLeft = left;
+          if (typeof onDone === 'function') onDone();
+          return;
+        }
+
+        // scroll-snap will "jump" during animation in some browsers; disable it temporarily.
+        var prevSnap = vViewport.style.scrollSnapType;
+        var prevBehavior = vViewport.style.scrollBehavior;
+        vViewport.style.scrollSnapType = 'none';
+        vViewport.style.scrollBehavior = 'auto';
+
+        var startTime = null;
+        function easeInOut(t) {
+          return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+        function step(ts) {
+          if (startTime === null) startTime = ts;
+          var p = (ts - startTime) / duration;
+          if (p > 1) p = 1;
+          var eased = easeInOut(p);
+          vViewport.scrollLeft = start + change * eased;
+          if (p < 1) {
+            vAnimRaf = window.requestAnimationFrame(step);
+          } else {
+            // Restore snap after animation; then snap to the nearest item.
+            vViewport.style.scrollSnapType = prevSnap;
+            vViewport.style.scrollBehavior = prevBehavior;
+            vViewport.scrollLeft = left;
+            vAnimRaf = null;
+            if (typeof onDone === 'function') onDone();
+          }
+        }
+        vAnimRaf = window.requestAnimationFrame(step);
+      }
+
+      function updateVideoDots() {
+        var dots = vDots.querySelectorAll('.dp-video-dot');
+        for (var d2 = 0; d2 < dots.length; d2++) {
+          dots[d2].classList.toggle('is-active', d2 === vIndex);
+        }
+      }
+
+      function scrollToDom(domIdx, behavior, onDone) {
+        var targetLeft = getTargetScrollLeftForDomIndex(domIdx);
+        smoothScrollTo(targetLeft, behavior || 'auto', onDone);
+      }
+
+      function scrollToLogical(logicalIdx, behavior, onDone) {
+        vIndex = ((logicalIdx % vOriginalCount) + vOriginalCount) % vOriginalCount;
+        updateVideoDots();
+        scrollToDom(domIndexFromLogical(vIndex), behavior || 'auto', onDone);
+      }
+
+      function setVideoActive(i, behavior) {
+        // Infinite wrap with seamless transition:
+        // last -> next: animate to firstClone, then jump to first real (no animation)
+        // first -> prev: animate to lastClone, then jump to last real (no animation)
+        if (i < 0) {
+          // animate to lastClone (dom 0), then jump to last real (dom vOriginalCount)
+          vIndex = vOriginalCount - 1;
+          updateVideoDots();
+          scrollToDom(0, behavior || 'smooth', function () {
+            scrollToDom(vOriginalCount, 'auto');
+          });
+          return;
+        }
+        if (i >= vOriginalCount) {
+          // animate to firstClone (dom vOriginalCount+1), then jump to first real (dom 1)
+          vIndex = 0;
+          updateVideoDots();
+          scrollToDom(vOriginalCount + 1, behavior || 'smooth', function () {
+            scrollToDom(1, 'auto');
+          });
+          return;
+        }
+        scrollToLogical(i, behavior || 'auto');
+      }
+
+      // Build dots
+      for (var j = 0; j < vOriginalCount; j++) {
+        (function (dotIndex) {
+          var dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'dp-video-dot' + (dotIndex === 0 ? ' is-active' : '');
+          dot.setAttribute('aria-label', 'Go to video ' + (dotIndex + 1));
+          dot.addEventListener('click', function () { setVideoActive(dotIndex, 'smooth'); });
+          vDots.appendChild(dot);
+        })(j);
+      }
+
+      vPrev.addEventListener('click', function () { setVideoActive(vIndex - 1, 'smooth'); });
+      vNext.addEventListener('click', function () { setVideoActive(vIndex + 1, 'smooth'); });
+      window.addEventListener('resize', function () { scrollToLogical(vIndex, 'auto'); });
+
+      // Keep dots in sync if user scrolls via touchpad/swipe (scrollbar is hidden)
+      var scrollRaf = null;
+      var scrollEndTimer = null;
+      vViewport.addEventListener('scroll', function () {
+        if (scrollRaf !== null) return;
+        scrollRaf = window.requestAnimationFrame(function () {
+          scrollRaf = null;
+          var viewportRect = vViewport.getBoundingClientRect();
+          var viewportCenter = viewportRect.left + viewportRect.width / 2;
+          var bestIdx = 0;
+          var bestDist = Infinity;
+          for (var k = 0; k < vItems.length; k++) {
+            var r = vItems[k].getBoundingClientRect();
+            var center = r.left + r.width / 2;
+            var dist = Math.abs(center - viewportCenter);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIdx = k;
+            }
+          }
+          var newLogical = logicalFromDomIndex(bestIdx);
+          if (newLogical !== vIndex) {
+            vIndex = newLogical;
+            updateVideoDots();
+          }
+
+          // If scroll settles on a clone, jump to the corresponding real item (no animation)
+          if (scrollEndTimer !== null) window.clearTimeout(scrollEndTimer);
+          scrollEndTimer = window.setTimeout(function () {
+            if (bestIdx === 0) scrollToDom(vOriginalCount, 'auto');
+            if (bestIdx === vOriginalCount + 1) scrollToDom(1, 'auto');
+          }, 120);
+        });
+      });
+
+      // Start at first real item (dom index 1) after layout settles.
+      window.requestAnimationFrame(function () {
+        vIndex = 0;
+        updateVideoDots();
+        scrollToDom(1, 'auto');
+      });
+
+      // Comparisons: carousel logic (buttons + dots), fail fast on missing DOM/assets
+      var cCarousel = document.getElementById('dp-cmp-carousel');
+      var cTrack = document.getElementById('dp-cmp-track');
+      var cDots = document.getElementById('dp-cmp-dots');
+      var cPrev = document.getElementById('dp-cmp-prev');
+      var cNext = document.getElementById('dp-cmp-next');
+      var cViewport = cCarousel.querySelector('.dp-video-viewport');
+      if (!cCarousel || !cTrack || !cDots || !cPrev || !cNext) {
+        throw new Error('Comparisons carousel DOM not found.');
+      }
+      if (!cViewport) {
+        throw new Error('Comparisons viewport DOM not found.');
+      }
+
+      var cItems = cTrack.querySelectorAll('.dp-video-item');
+      if (!cItems || cItems.length === 0) {
+        throw new Error('No comparison videos found in carousel.');
+      }
+
+      // Infinite loop: clone tail/head so the carousel is "circular".
+      var cOriginalCount = cItems.length;
+      var cOriginalItems = Array.prototype.slice.call(cItems);
+      var cFirstClone = cOriginalItems[0].cloneNode(true);
+      var cLastClone = cOriginalItems[cOriginalCount - 1].cloneNode(true);
+      cFirstClone.setAttribute('data-clone', 'first');
+      cLastClone.setAttribute('data-clone', 'last');
+      cTrack.insertBefore(cLastClone, cOriginalItems[0]);
+      cTrack.appendChild(cFirstClone);
+
+      // Re-query items after cloning: [lastClone, ...originals..., firstClone]
+      cItems = cTrack.querySelectorAll('.dp-video-item');
+
+      // Fail fast if any comparison video fails to load (including clones)
+      var cEls = cTrack.querySelectorAll('video');
+      for (var cc = 0; cc < cEls.length; cc++) {
+        (function (videoEl) {
+          videoEl.addEventListener('error', function () {
+            var srcEl = videoEl.querySelector('source');
+            var src = srcEl ? srcEl.src : '(unknown)';
+            throw new Error('Failed to load comparison video: ' + src);
+          });
+        })(cEls[cc]);
+      }
+
+      // logical index in [0..cOriginalCount-1]
+      var cIndex = 0;
+
+      function cClampIndex(i) {
+        if (i < 0) return 0;
+        var maxI = cOriginalCount - 1;
+        if (i > maxI) return maxI;
+        return i;
+      }
+
+      // Map logical index -> DOM index in cItems: +1 because cItems[0] is lastClone
+      function cDomIndexFromLogical(i) {
+        return i + 1;
+      }
+      function cLogicalFromDomIndex(domIdx) {
+        if (domIdx === 0) return cOriginalCount - 1;            // lastClone
+        if (domIdx === cOriginalCount + 1) return 0;             // firstClone
+        return domIdx - 1;                                       // real items
+      }
+
+      function cGetTargetScrollLeftForDomIndex(domIdx) {
+        var viewportRect = cViewport.getBoundingClientRect();
+        var itemRect = cItems[domIdx].getBoundingClientRect();
+        var viewportCenter = viewportRect.left + viewportRect.width / 2;
+        var itemCenter = itemRect.left + itemRect.width / 2;
+        var delta = itemCenter - viewportCenter;
+        return cViewport.scrollLeft + delta;
+      }
+
+      var cAnimRaf = null;
+      function cancelCmpScrollAnim() {
+        if (cAnimRaf !== null) {
+          window.cancelAnimationFrame(cAnimRaf);
+          cAnimRaf = null;
+        }
+      }
+
+      function cSmoothScrollTo(left, behavior, onDone) {
+        cancelCmpScrollAnim();
+
+        // Clamp into scrollable range
+        var maxLeft = cViewport.scrollWidth - cViewport.clientWidth;
+        if (maxLeft < 0) maxLeft = 0;
+        if (left < 0) left = 0;
+        if (left > maxLeft) left = maxLeft;
+
+        var start = cViewport.scrollLeft;
+        var change = left - start;
+        var duration = behavior === 'smooth' ? 320 : 0;
+        if (duration === 0 || change === 0) {
+          cViewport.scrollLeft = left;
+          if (typeof onDone === 'function') onDone();
+          return;
+        }
+
+        // scroll-snap will "jump" during animation in some browsers; disable it temporarily.
+        var prevSnap = cViewport.style.scrollSnapType;
+        var prevBehavior = cViewport.style.scrollBehavior;
+        cViewport.style.scrollSnapType = 'none';
+        cViewport.style.scrollBehavior = 'auto';
+
+        var startTime = null;
+        function easeInOut(t) {
+          return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+        function step(ts) {
+          if (startTime === null) startTime = ts;
+          var p = (ts - startTime) / duration;
+          if (p > 1) p = 1;
+          var eased = easeInOut(p);
+          cViewport.scrollLeft = start + change * eased;
+          if (p < 1) {
+            cAnimRaf = window.requestAnimationFrame(step);
+          } else {
+            // Restore snap after animation; then snap to the nearest item.
+            cViewport.style.scrollSnapType = prevSnap;
+            cViewport.style.scrollBehavior = prevBehavior;
+            cViewport.scrollLeft = left;
+            cAnimRaf = null;
+            if (typeof onDone === 'function') onDone();
+          }
+        }
+        cAnimRaf = window.requestAnimationFrame(step);
+      }
+
+      function updateCmpDots() {
+        var dots = cDots.querySelectorAll('.dp-video-dot');
+        for (var d3 = 0; d3 < dots.length; d3++) {
+          dots[d3].classList.toggle('is-active', d3 === cIndex);
+        }
+      }
+
+      function cScrollToDom(domIdx, behavior, onDone) {
+        var targetLeft = cGetTargetScrollLeftForDomIndex(domIdx);
+        cSmoothScrollTo(targetLeft, behavior || 'auto', onDone);
+      }
+
+      function cScrollToLogical(logicalIdx, behavior, onDone) {
+        cIndex = ((logicalIdx % cOriginalCount) + cOriginalCount) % cOriginalCount;
+        updateCmpDots();
+        cScrollToDom(cDomIndexFromLogical(cIndex), behavior || 'auto', onDone);
+      }
+
+      function setCmpActive(i, behavior) {
+        // Infinite wrap with seamless transition:
+        // last -> next: animate to firstClone, then jump to first real (no animation)
+        // first -> prev: animate to lastClone, then jump to last real (no animation)
+        if (i < 0) {
+          // animate to lastClone (dom 0), then jump to last real (dom cOriginalCount)
+          cIndex = cOriginalCount - 1;
+          updateCmpDots();
+          cScrollToDom(0, behavior || 'smooth', function () {
+            cScrollToDom(cOriginalCount, 'auto');
+          });
+          return;
+        }
+        if (i >= cOriginalCount) {
+          // animate to firstClone (dom cOriginalCount+1), then jump to first real (dom 1)
+          cIndex = 0;
+          updateCmpDots();
+          cScrollToDom(cOriginalCount + 1, behavior || 'smooth', function () {
+            cScrollToDom(1, 'auto');
+          });
+          return;
+        }
+        cScrollToLogical(i, behavior || 'auto');
+      }
+
+      // Build dots for comparisons
+      for (var jc = 0; jc < cOriginalCount; jc++) {
+        (function (dotIndex) {
+          var dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'dp-video-dot' + (dotIndex === 0 ? ' is-active' : '');
+          dot.setAttribute('aria-label', 'Go to comparison ' + (dotIndex + 1));
+          dot.addEventListener('click', function () { setCmpActive(dotIndex, 'smooth'); });
+          cDots.appendChild(dot);
+        })(jc);
+      }
+
+      cPrev.addEventListener('click', function () { setCmpActive(cIndex - 1, 'smooth'); });
+      cNext.addEventListener('click', function () { setCmpActive(cIndex + 1, 'smooth'); });
+      window.addEventListener('resize', function () { cScrollToLogical(cIndex, 'auto'); });
+
+      // Keep dots in sync if user scrolls via touchpad/swipe (scrollbar is hidden)
+      var cScrollRaf = null;
+      var cScrollEndTimer = null;
+      cViewport.addEventListener('scroll', function () {
+        if (cScrollRaf !== null) return;
+        cScrollRaf = window.requestAnimationFrame(function () {
+          cScrollRaf = null;
+          var viewportRect = cViewport.getBoundingClientRect();
+          var viewportCenter = viewportRect.left + viewportRect.width / 2;
+          var bestIdx = 0;
+          var bestDist = Infinity;
+          for (var kc = 0; kc < cItems.length; kc++) {
+            var r = cItems[kc].getBoundingClientRect();
+            var center = r.left + r.width / 2;
+            var dist = Math.abs(center - viewportCenter);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIdx = kc;
+            }
+          }
+          var newLogical = cLogicalFromDomIndex(bestIdx);
+          if (newLogical !== cIndex) {
+            cIndex = newLogical;
+            updateCmpDots();
+            // Lazy-load videos near the new position
+            if (typeof loadCmpVideosNear === 'function') loadCmpVideosNear(cIndex);
+            // Auto-play the current video
+            if (typeof pauseOtherCmpVideos === 'function') pauseOtherCmpVideos(bestIdx);
+          }
+
+          // If scroll settles on a clone, jump to the corresponding real item (no animation)
+          if (cScrollEndTimer !== null) window.clearTimeout(cScrollEndTimer);
+          cScrollEndTimer = window.setTimeout(function () {
+            if (bestIdx === 0) cScrollToDom(cOriginalCount, 'auto');
+            if (bestIdx === cOriginalCount + 1) cScrollToDom(1, 'auto');
+          }, 120);
+        });
+      });
+
+      // Lazy-load videos: only load current and adjacent videos to reduce initial load time.
+      // Videos use data-src on <source> instead of src; this function activates them.
+      function loadLazyVideo(video) {
+        if (video.dataset.loaded) return;
+        var source = video.querySelector('source[data-src]');
+        if (!source) return;
+        source.src = source.getAttribute('data-src');
+        source.removeAttribute('data-src');
+        video.dataset.loaded = '1';
+        video.preload = 'metadata';
+        video.load();
+      }
+
+      function loadCmpVideosNear(logicalIdx) {
+        // Load current, prev, next (wrapping)
+        var indicesToLoad = [
+          logicalIdx,
+          (logicalIdx - 1 + cOriginalCount) % cOriginalCount,
+          (logicalIdx + 1) % cOriginalCount
+        ];
+        for (var li = 0; li < indicesToLoad.length; li++) {
+          var domIdx = cDomIndexFromLogical(indicesToLoad[li]);
+          var video = cItems[domIdx].querySelector('video[data-lazy-video]');
+          if (video) loadLazyVideo(video);
+        }
+        // Also load videos in clones if they exist
+        var cloneFirst = cItems[cOriginalCount + 1];
+        var cloneLast = cItems[0];
+        if (cloneFirst) {
+          var vf = cloneFirst.querySelector('video[data-lazy-video]');
+          if (vf) loadLazyVideo(vf);
+        }
+        if (cloneLast) {
+          var vl = cloneLast.querySelector('video[data-lazy-video]');
+          if (vl) loadLazyVideo(vl);
+        }
+      }
+
+      // Pause all comparison videos except the one at the given DOM index
+      function pauseOtherCmpVideos(activeDomIdx) {
+        for (var vi = 0; vi < cItems.length; vi++) {
+          var video = cItems[vi].querySelector('video');
+          if (video) {
+            if (vi === activeDomIdx) {
+              video.play().catch(function() {}); // Auto-play current, ignore restrictions
+            } else {
+              video.pause();
+            }
+          }
+        }
+      }
+
+      // Patch setCmpActive to also trigger lazy loading and auto-play
+      var originalSetCmpActive = setCmpActive;
+      setCmpActive = function(i, behavior) {
+        // Determine the target logical index
+        var targetLogical = i;
+        if (i < 0) targetLogical = cOriginalCount - 1;
+        if (i >= cOriginalCount) targetLogical = 0;
+        loadCmpVideosNear(targetLogical);
+        originalSetCmpActive(i, behavior);
+        // Auto-play the target video after a short delay (wait for scroll animation)
+        var playDomIdx = cDomIndexFromLogical(targetLogical);
+        setTimeout(function() {
+          pauseOtherCmpVideos(playDomIdx);
+        }, 350); // Matches scroll animation duration (320ms) + buffer
+      };
+
+      // Start at first real item (dom index 1) after layout settles.
+      window.requestAnimationFrame(function () {
+        cIndex = 0;
+        updateCmpDots();
+        loadCmpVideosNear(0); // Load first video and neighbors
+        cScrollToDom(1, 'auto');
+        // Auto-play the first video
+        pauseOtherCmpVideos(1);
+      });
+
+      // Quantitative tables: auto-highlight best/second-best per column (lower is better)
+      // Also compute % change for "Ours" row vs best of other methods
+      (function () {
+        var tables = document.querySelectorAll('table.dp-metrics-table[data-highlight="min2"]');
+        for (var ti = 0; ti < tables.length; ti++) {
+          var table = tables[ti];
+          var bodyRows = table.querySelectorAll('tbody tr');
+          if (!bodyRows || bodyRows.length === 0) continue;
+
+          // Find "Ours" row
+          var oursRow = table.querySelector('tbody tr.is-ours');
+
+          // Count numeric columns from first row
+          var firstRowTds = bodyRows[0].querySelectorAll('td');
+          if (!firstRowTds || firstRowTds.length <= 1) continue;
+          var colCount = firstRowTds.length - 1; // exclude method col
+
+          for (var c = 0; c < colCount; c++) {
+            var values = [];
+            var othersValues = [];
+            var oursCell = null;
+            var oursVal = null;
+
+            for (var r = 0; r < bodyRows.length; r++) {
+              var row = bodyRows[r];
+              var tds = row.querySelectorAll('td');
+              var cell = tds[c + 1];
+              if (!cell) continue;
+              var raw = cell.getAttribute('data-val');
+              if (raw === null || raw === '') continue;
+              var v = parseFloat(raw);
+              if (!isFinite(v)) continue;
+
+              values.push({ v: v, cell: cell });
+              cell.classList.remove('is-best');
+              cell.classList.remove('is-second');
+
+              if (row.classList.contains('is-ours')) {
+                oursCell = cell;
+                oursVal = v;
+              } else {
+                othersValues.push(v);
+              }
+            }
+
+            // Highlight best/second-best
+            values.sort(function (a, b) { return a.v - b.v; });
+            if (values.length >= 1) values[0].cell.classList.add('is-best');
+            if (values.length >= 2) values[1].cell.classList.add('is-second');
+
+            // Compute % change for Ours vs best of others
+            if (oursCell && oursVal !== null && othersValues.length > 0) {
+              var bestOther = Math.min.apply(null, othersValues);
+              if (bestOther > 0) {
+                var pctChange = ((oursVal - bestOther) / bestOther) * 100;
+                var span = document.createElement('span');
+                span.style.fontSize = '0.65rem';
+                span.style.marginLeft = '3px';
+                span.style.fontWeight = '600';
+                if (pctChange < 0) {
+                  // Lower = better (green, down arrow)
+                  span.style.color = '#16a34a';
+                  span.textContent = '↓' + Math.abs(pctChange).toFixed(0) + '%';
+                } else if (pctChange > 0) {
+                  // Higher = worse (red, up arrow)
+                  span.style.color = '#dc2626';
+                  span.textContent = '↑' + pctChange.toFixed(0) + '%';
+                } else {
+                  span.style.color = '#6b7280';
+                  span.textContent = '—';
+                }
+                oursCell.appendChild(span);
+              }
+            }
+          }
+        }
+      })();
+
+
+    })();
+  </script>
+</body>
+</html>
