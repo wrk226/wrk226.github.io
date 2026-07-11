@@ -19,7 +19,9 @@ function renderPapers() {
     const matchYear = activeYear === '全部年份' || (activeYear === '经典' ? Number(card.dataset.year) <= 2023 : card.dataset.year === activeYear);
     const matchText = !needle || card.textContent.toLowerCase().includes(needle);
     const matches = matchTopic && matchYear && matchText;
-    card.hidden = !matches || matched >= visibleLimit;
+    const shouldShow = matches && matched < visibleLimit;
+    card.hidden = !shouldShow;
+    card.style.setProperty('display', shouldShow ? 'grid' : 'none', 'important');
     if (matches) matched += 1;
   });
   resultCount.textContent = matched + ' 篇结果';
