@@ -1,24 +1,40 @@
-const papers = [
-  {title:"SHOW",date:"2026.06.26",venue:"arXiv 2026",tag:"人-场景",signal:"统一度量空间",summary:"在统一度量空间中耦合前馈场景重建与可提示 HMR，让人体尺度先验和场景几何相互约束。",href:"https://arxiv.org/abs/2606.27720",topics:["视频","多人","世界坐标"]},
-  {title:"DanceHMR",date:"2026.05.18",venue:"arXiv 2026",tag:"视频",signal:"手部 + 全身",summary:"把身体上下文与手部局部观测融合到统一时序架构，聚焦单目视频中的全身稳定性与细粒度手势。",href:"https://arxiv.org/abs/2605.18102"},
-  {title:"InterMesh",date:"2026.05.06",venue:"arXiv 2026",tag:"多人",signal:"显式交互",summary:"将人—物与人—人交互语义显式注入多人网格恢复，面向遮挡、接触和复杂互动场景。",href:"https://arxiv.org/abs/2605.04554"},
-  {title:"ResiHMR",date:"2026.04.30",venue:"CVPR 2026",tag:"单图",signal:"拓扑自适应",summary:"面向肢体缺失人群显式恢复残肢表面，以拓扑自适应优化突破固定完整人体先验的限制。",href:"https://arxiv.org/abs/2604.28025"},
-  {title:"OmniFit",date:"2026.04.23",venue:"ECCV 2026",tag:"拟合",signal:"多模态 + 尺度无关",summary:"从完整扫描、局部深度、图像条件点云或生成式资产预测稠密地标，再完成尺度无关的 SMPL-X 拟合。",href:"https://arxiv.org/abs/2604.21575",topics:["多视角"]},
-  {title:"GRAFT",date:"2026.04.21",venue:"arXiv 2026",tag:"人-场景",signal:"交互梯度",summary:"把几何拟合摊销为前馈迭代，通过场景几何探针预测修正量，快速减少悬浮与穿插。",href:"https://arxiv.org/abs/2604.19624",topics:["单图","多人","拟合"]},
-  {title:"Fast SAM 3D Body",date:"2026.03.16",venue:"arXiv 2026",tag:"实时",signal:"最高 10.9×",summary:"以训练无关的并行化与剪枝加速 SAM 3D Body，探索单 RGB 流驱动实时人体控制。",href:"https://arxiv.org/abs/2603.15603"},
-  {title:"CHROMM",date:"2026.03.13",venue:"arXiv 2026",tag:"多视角",signal:"人-场景单次前向",summary:"在一次前向中联合恢复相机、场景点云和多人网格，并以几何线索完成跨视角身份关联。",href:"https://arxiv.org/abs/2603.12789",topics:["人-场景","多人","视频","世界坐标"]},
-  {title:"DuoMo",date:"2026.03.03",venue:"arXiv 2026",tag:"世界坐标",signal:"双运动扩散",summary:"先在相机坐标生成运动，再用世界坐标扩散模型做全局一致性修正，并可直接生成稀疏网格顶点。",href:"https://arxiv.org/abs/2603.03265",topics:["视频","生成式"]},
-  {title:"SAM 3D Body",date:"2026.02.23",venue:"CVPR 2026",tag:"单图",signal:"可提示全身",summary:"可提示的单图全身 HMR 模型，强调复杂野外场景下的泛化、遮挡鲁棒性与统一全身网格。",href:"https://openaccess.thecvf.com/content/CVPR2026/html/Yang_SAM_3D_Body_Robust_Full-Body_Human_Mesh_Recovery_CVPR_2026_paper.html"},
-  {title:"DiffProxy",date:"2026.01.05",venue:"arXiv 2026",tag:"多视角",signal:"扩散稠密代理",summary:"用扩散模型生成跨视角一致、像素对齐的人体稠密代理，以纯合成训练跨越真实数据域差距。",href:"https://arxiv.org/abs/2601.02267",topics:["生成式","拟合"]},
-  {title:"Metric-Aware HMR",date:"2025.11.17",venue:"arXiv 2025",tag:"多人",signal:"尺度一致性",summary:"联合优化拥挤场景中所有人的相机空间位置，直接估计具有真实尺度感的网格与相机参数。",href:"https://arxiv.org/abs/2511.13282"},
-  {title:"Human3R",date:"2025.10.07",venue:"ICLR 2026",tag:"人-场景",signal:"一阶段 · 15 FPS",summary:"从随手拍单目视频在线联合恢复世界坐标多人 SMPL-X、稠密场景与相机轨迹，无需检测或 SLAM 预处理。",href:"https://arxiv.org/abs/2510.06219",topics:["世界坐标","视频","多人","实时"]},
-  {title:"Fish2Mesh Transformer",date:"2025.10",venue:"ICCV 2025",tag:"第一视角",signal:"鱼眼感知",summary:"针对头戴鱼眼相机的畸变与自遮挡，引入第一视角位置编码并回归 SMPL 与相机位移。",href:"https://openaccess.thecvf.com/content/ICCV2025/html/Shen_Fish2Mesh_Transformer_3D_Human_Mesh_Recovery_from_Egocentric_Vision_ICCV_2025_paper.html"},
-  {title:"MEGA",date:"2025.06",venue:"CVPR 2025",tag:"生成式",signal:"多解建模",summary:"将姿态与体型离散为 token，以掩码生成建模同时支持确定性单解与随机多解恢复。",href:"https://openaccess.thecvf.com/content/CVPR2025/html/Fiche_MEGA_Masked_Generative_Autoencoder_for_Human_Mesh_Recovery_CVPR_2025_paper.html"},
-  {title:"BLADE",date:"2025.06",venue:"CVPR 2025",tag:"单图",signal:"透视校准",summary:"从单图可靠估计深度平移、焦距与完整 3D 位移，改善近距离人体的投影与网格对齐。",href:"https://openaccess.thecvf.com/content/CVPR2025/html/Wang_BLADE_Single-view_Body_Mesh_Estimation_through_Accurate_Depth_Estimation_CVPR_2025_paper.html"},
-  {title:"HeatFormer",date:"2025.06",venue:"CVPR 2025",tag:"多视角",signal:"神经优化器",summary:"以热图生成与对齐迭代细化 SMPL 参数，并对相机数量、布置和标定方式保持较强适应性。",href:"https://openaccess.thecvf.com/content/CVPR2025/html/Matsubara_HeatFormer_A_Neural_Optimizer_for_Multiview_Human_Mesh_Recovery_CVPR_2025_paper.html"}
-];
-const filters=["全部","单图","视频","多人","世界坐标","人-场景","拟合","实时","生成式","多视角"];let active="全部";
-const list=document.querySelector("#paper-list"),search=document.querySelector("#paper-search"),filterBox=document.querySelector("#filters");
-function renderFilters(){filterBox.innerHTML=filters.map(f=>`<button type="button" class="${f===active?"active":""}" data-filter="${f}">${f}</button>`).join("");}
-function render(){const q=search.value.trim().toLowerCase();const visible=papers.filter(p=>(active==="全部"||p.tag===active||p.topics?.includes(active)||(active==="视频"&&p.tag==="第一视角"))&&(!q||Object.values(p).flat().join(" ").toLowerCase().includes(q)));list.innerHTML=visible.length?visible.map((p,i)=>`<a class="paper-row" href="${p.href}" target="_blank" rel="noreferrer"><div class="paper-index">${String(i+1).padStart(2,"0")}</div><div class="paper-main"><div class="paper-topline"><span>${p.venue}</span><time>${p.date}</time></div><h3>${p.title}</h3><p>${p.summary}</p></div><div class="paper-side"><span>${p.tag}</span><b>${p.signal}</b></div><i>↗</i></a>`).join(""):`<div class="empty">没有匹配的论文。试试更短的关键词。</div>`;}
-filterBox.addEventListener("click",e=>{if(e.target.matches("button")){active=e.target.dataset.filter;renderFilters();render();}});search.addEventListener("input",render);renderFilters();render();
+const tierButtons = [...document.querySelectorAll('.filter-row button')];
+const cards = [...document.querySelectorAll('.paper-card')];
+const search = document.querySelector('.paper-search input');
+const resultCount = document.querySelector('.result-count');
+let activeTier = '全部';
+
+function renderPapers() {
+  const needle = (search.value || '').trim().toLowerCase();
+  let visible = 0;
+  cards.forEach((card) => {
+    const matchTier = activeTier === '全部' || card.dataset.tier === activeTier;
+    const matchText = !needle || card.textContent.toLowerCase().includes(needle);
+    card.hidden = !(matchTier && matchText);
+    if (!card.hidden) visible += 1;
+  });
+  resultCount.textContent = visible + ' / ' + cards.length;
+}
+
+tierButtons.forEach((button) => button.addEventListener('click', () => {
+  activeTier = button.textContent.trim();
+  tierButtons.forEach((item) => item.classList.toggle('active', item === button));
+  renderPapers();
+}));
+search.addEventListener('input', renderPapers);
+
+const ablations = {
+  FULL: { output: 'P(uv) + Δxyz', note: '主候选：pointmap 提供坐标系锚，残差承担人体几何修正。' },
+  'NO PM': { output: 'Δxyz', note: '检验位置编码是否已经足够定位，以及 pointmap 硬锚是否反而带来噪声。' },
+  'NO Δ': { output: 'P(uv)', note: '检验网络是否只会在 pointmap 上取点；若失败，证明自由三维残差不可缺。' },
+};
+const ablationButtons = [...document.querySelectorAll('.ablation-tabs button')];
+ablationButtons.forEach((button) => button.addEventListener('click', () => {
+  const key = button.querySelector('span').textContent.trim();
+  const config = ablations[key];
+  ablationButtons.forEach((item) => item.classList.toggle('active', item === button));
+  document.querySelector('.arch-output span').textContent = '3D OUTPUT · ' + key;
+  document.querySelector('.arch-output b').textContent = config.output;
+  document.querySelector('.arch-note').lastChild.textContent = config.note;
+}));
+renderPapers();
