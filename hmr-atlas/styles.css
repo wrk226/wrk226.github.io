@@ -39,12 +39,13 @@ button, input { font: inherit; }
 .hero-stats span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
 
 .library { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 76px 0 100px; }
-.library-sidebar { align-self: start; position: sticky; top: 24px; }
+.library-sidebar { align-self: start; position: sticky; top: 24px; max-height: calc(100vh - 48px); padding-right: 8px; overflow-y: auto; }
 .paper-search { display: flex; align-items: center; height: 44px; padding: 0 12px; background: var(--white); border: 1px solid var(--line); }
 .paper-search span { color: var(--blue); font-size: 18px; }
 .paper-search input { width: 100%; margin-left: 8px; background: transparent; border: 0; outline: 0; font-size: 12px; }
-.sidebar-group { margin-top: 28px; }
+.sidebar-group { position: relative; margin-top: 28px; }
 .sidebar-group > span { display: block; margin-bottom: 10px; color: var(--muted); font: 700 9px var(--font-geist-mono); letter-spacing: .1em; }
+.filter-clear { position: absolute; top: -4px; right: 0; padding: 2px 4px; color: var(--blue); background: transparent; border: 0; cursor: pointer; font-size: 9px; }
 .filter-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .filter-stack button { padding: 8px 9px; color: var(--muted); background: transparent; border: 1px solid var(--line); cursor: pointer; font-size: 10px; text-align: left; }
 .filter-stack button:hover { color: var(--blue); border-color: var(--blue); }
