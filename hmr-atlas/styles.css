@@ -64,6 +64,7 @@ button, input { font: inherit; }
 
 .paper-list { border-top: 1px solid var(--line); }
 .paper-row.hidden-by-page { display: none; }
+.paper-row[hidden] { display: none !important; }
 .paper-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) 22px; gap: 20px; padding: 23px 4px; border-bottom: 1px solid var(--line); transition: background .15s, padding .15s; }
 .paper-row:hover { padding-inline: 12px; background: var(--white); }
 .paper-row > time { padding-top: 3px; color: var(--muted); font: 9px "SFMono-Regular", Consolas, monospace; }
