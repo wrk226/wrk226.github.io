@@ -45,7 +45,7 @@ yearButtons.forEach((button) => button.addEventListener('click', () => {
 }));
 search.addEventListener('input', () => { visibleLimit = 15; renderPapers(); });
 if (loadMore) loadMore.addEventListener('click', () => { visibleLimit += 15; renderPapers(); });
-document.querySelectorAll('.interest-grid button').forEach((button) => button.addEventListener('click', () => {
+document.querySelectorAll('.interests button').forEach((button) => button.addEventListener('click', () => {
   activeTopic = button.dataset.filter;
   visibleLimit = 15;
   topicButtons.forEach((item) => item.classList.toggle('active', item.textContent.trim() === activeTopic));
