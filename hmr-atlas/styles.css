@@ -86,6 +86,7 @@ button, input { font: inherit; }
 .paper-main > p { max-width: 760px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.62; }
 .paper-summary { white-space: pre-line; }
 .paper-summary > b { margin-right: 8px; color: #d33a2c; font: 700 8px var(--font-geist-mono); letter-spacing: .06em; }
+.paper-term { padding: 0 2px; color: #c83225; background: #f3e8e4; font-weight: 700; }
 .term-notes { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
 .term-notes > span { padding: 5px 7px; color: var(--muted); background: #f3e8e4; font-size: 8px; line-height: 1.45; }
 .term-notes b { margin-right: 5px; color: #c83225; font-family: var(--font-geist-mono); }
