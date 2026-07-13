@@ -1,3 +1,4 @@
+const READ_STORAGE_KEY = 'hmr-atlas:read-papers:v1';
 const stacks = [...document.querySelectorAll('.filter-stack')];
 const [domainStack, inputStack, taskStack, settingStack, yearStack] = stacks;
 const paperList = document.querySelector('.paper-list');
@@ -7,16 +8,48 @@ const search = document.querySelector('.paper-search input');
 const resultCount = document.querySelector('.library-tools > span');
 const resultTitle = document.querySelector('.library-head h2');
 const sortSelect = document.querySelector('.library-tools select');
-const publicationSelect = document.querySelector('.filter-select');
+const publicationSelect = document.querySelector('#publication-filter');
+const readSelect = document.querySelector('#read-filter');
 const [citationMin, citationMax] = [...document.querySelectorAll('.range-inputs input')];
 const loadMore = document.querySelector('.load-more');
 const selected = { domain: new Set(), inputs: new Set(), task: new Set(), setting: new Set() };
 let activeYear = '全部年份';
 let visibleLimit = 15;
+let readPaperIds = loadReadPaperIds();
 cards.forEach((card) => card.classList.remove('hidden-by-page'));
+
+function loadReadPaperIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(READ_STORAGE_KEY) || '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((item) => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistReadPaperIds() {
+  try {
+    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify([...readPaperIds]));
+  } catch {
+    // Keep the marker usable for this session when browser storage is unavailable.
+  }
+}
 
 function values(card, key) {
   return (card.dataset[key] || '').split('|').filter(Boolean);
+}
+
+function syncReadMarkers() {
+  cards.forEach((card) => {
+    const isRead = readPaperIds.has(card.dataset.paperId);
+    const button = card.querySelector('.read-toggle');
+    card.dataset.read = isRead ? 'true' : 'false';
+    card.classList.toggle('is-read', isRead);
+    if (!button) return;
+    button.setAttribute('aria-pressed', isRead ? 'true' : 'false');
+    button.setAttribute('aria-label', (isRead ? '标记为未读：' : '标记为已读：') + (card.querySelector('h3')?.textContent || '论文'));
+    button.innerHTML = '<span aria-hidden="true">' + (isRead ? '✓' : '○') + '</span>' + (isRead ? '已读' : '未读');
+  });
 }
 
 function sortCards(items) {
@@ -34,6 +67,7 @@ function renderPapers() {
   const min = citationMin.value === '' ? null : Number(citationMin.value);
   const max = citationMax.value === '' ? null : Number(citationMax.value);
   const publication = publicationSelect.value;
+  const readFilter = readSelect.value;
   const matchedCards = sortCards(cards.filter((card) => {
     const domainMatch = selected.domain.size === 0 || card.dataset.domain === [...selected.domain][0];
     const inputValues = values(card, 'inputs');
@@ -46,8 +80,10 @@ function renderPapers() {
     const citations = Number(card.dataset.citations || 0);
     const citationMatch = (min === null || citations >= min) && (max === null || citations <= max);
     const publicationMatch = publication === 'all' || card.dataset.publication === publication;
+    const isRead = readPaperIds.has(card.dataset.paperId);
+    const readMatch = readFilter === 'all' || (readFilter === 'read' ? isRead : !isRead);
     const textMatch = !needle || card.textContent.toLowerCase().includes(needle);
-    return domainMatch && inputMatch && taskMatch && settingMatch && yearMatch && citationMatch && publicationMatch && textMatch;
+    return domainMatch && inputMatch && taskMatch && settingMatch && yearMatch && citationMatch && publicationMatch && readMatch && textMatch;
   }));
 
   matchedCards.forEach((card) => paperList.insertBefore(card, emptyState));
@@ -60,6 +96,8 @@ function renderPapers() {
     card.style.setProperty('display', shouldShow ? 'grid' : 'none', 'important');
   });
   const labels = [...selected.domain, ...selected.inputs, ...selected.task, ...selected.setting];
+  if (readFilter === 'read') labels.push('已读');
+  if (readFilter === 'unread') labels.push('未读');
   resultTitle.textContent = labels.length ? labels.join(' × ') : '全部论文';
   resultCount.textContent = matched + ' 篇结果';
   emptyState.hidden = matched > 0;
@@ -72,7 +110,8 @@ function renderPapers() {
 function bindMulti(stack, dimension) {
   [...stack.querySelectorAll('button')].forEach((button) => button.addEventListener('click', () => {
     const value = button.textContent.trim();
-    selected[dimension].has(value) ? selected[dimension].delete(value) : selected[dimension].add(value);
+    if (selected[dimension].has(value)) selected[dimension].delete(value);
+    else selected[dimension].add(value);
     button.classList.toggle('active', selected[dimension].has(value));
     visibleLimit = 15;
     renderPapers();
@@ -97,8 +136,18 @@ bindMulti(settingStack, 'setting');
   visibleLimit = 15;
   renderPapers();
 }));
-[search, sortSelect, publicationSelect, citationMin, citationMax].forEach((control) => control.addEventListener('input', () => { visibleLimit = 15; renderPapers(); }));
+[search, sortSelect, publicationSelect, readSelect, citationMin, citationMax].forEach((control) => control.addEventListener('input', () => { visibleLimit = 15; renderPapers(); }));
 if (loadMore) loadMore.addEventListener('click', () => { visibleLimit += 15; renderPapers(); });
+document.querySelectorAll('.read-toggle').forEach((button) => button.addEventListener('click', () => {
+  const card = button.closest('.paper-row');
+  const paperId = card?.dataset.paperId;
+  if (!paperId) return;
+  if (readPaperIds.has(paperId)) readPaperIds.delete(paperId);
+  else readPaperIds.add(paperId);
+  persistReadPaperIds();
+  syncReadMarkers();
+  renderPapers();
+}));
 document.querySelectorAll('.interests button').forEach((button) => button.addEventListener('click', () => {
   const dimension = button.dataset.dimension;
   const value = button.dataset.filter;
@@ -108,7 +157,8 @@ document.querySelectorAll('.interests button').forEach((button) => button.addEve
     selected.domain.clear();
     if (!wasActive) selected.domain.add(value);
   } else {
-    selected[dimension].has(value) ? selected[dimension].delete(value) : selected[dimension].add(value);
+    if (selected[dimension].has(value)) selected[dimension].delete(value);
+    else selected[dimension].add(value);
   }
   const stack = dimension === 'domain' ? domainStack : dimension === 'task' ? taskStack : settingStack;
   [...stack.querySelectorAll('button')].forEach((item) => item.classList.toggle('active', selected[dimension].has(item.textContent.trim())));
@@ -116,4 +166,11 @@ document.querySelectorAll('.interests button').forEach((button) => button.addEve
   renderPapers();
   document.querySelector('#papers').scrollIntoView({behavior:'smooth'});
 }));
+window.addEventListener('storage', (event) => {
+  if (event.key !== READ_STORAGE_KEY) return;
+  readPaperIds = loadReadPaperIds();
+  syncReadMarkers();
+  renderPapers();
+});
+syncReadMarkers();
 renderPapers();
