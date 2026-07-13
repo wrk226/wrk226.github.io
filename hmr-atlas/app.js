@@ -1,4 +1,5 @@
 const READ_STORAGE_KEY = 'hmr-atlas:read-papers:v1';
+const NOTE_STORAGE_KEY = 'hmr-atlas:paper-notes:v1';
 const stacks = [...document.querySelectorAll('.filter-stack')];
 const [domainStack, inputStack, taskStack, settingStack, yearStack] = stacks;
 const paperList = document.querySelector('.paper-list');
@@ -16,6 +17,7 @@ const selected = { domain: new Set(), inputs: new Set(), task: new Set(), settin
 let activeYear = '全部年份';
 let visibleLimit = 15;
 let readPaperIds = loadReadPaperIds();
+let paperNotes = loadPaperNotes();
 cards.forEach((card) => card.classList.remove('hidden-by-page'));
 
 function loadReadPaperIds() {
@@ -35,6 +37,24 @@ function persistReadPaperIds() {
   }
 }
 
+function loadPaperNotes() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(NOTE_STORAGE_KEY) || '{}');
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+    return Object.fromEntries(Object.entries(stored).filter((entry) => typeof entry[1] === 'string'));
+  } catch {
+    return {};
+  }
+}
+
+function persistPaperNotes() {
+  try {
+    localStorage.setItem(NOTE_STORAGE_KEY, JSON.stringify(paperNotes));
+  } catch {
+    // Keep notes usable for this session when browser storage is unavailable.
+  }
+}
+
 function values(card, key) {
   return (card.dataset[key] || '').split('|').filter(Boolean);
 }
@@ -49,6 +69,13 @@ function syncReadMarkers() {
     button.setAttribute('aria-pressed', isRead ? 'true' : 'false');
     button.setAttribute('aria-label', (isRead ? '标记为未读：' : '标记为已读：') + (card.querySelector('h3')?.textContent || '论文'));
     button.innerHTML = '<span aria-hidden="true">' + (isRead ? '✓' : '○') + '</span>' + (isRead ? '已读' : '未读');
+  });
+}
+
+function syncNoteFields() {
+  cards.forEach((card) => {
+    const input = card.querySelector('.paper-note-input');
+    if (input) input.value = paperNotes[card.dataset.paperId] || '';
   });
 }
 
@@ -148,6 +175,14 @@ document.querySelectorAll('.read-toggle').forEach((button) => button.addEventLis
   syncReadMarkers();
   renderPapers();
 }));
+document.querySelectorAll('.paper-note-input').forEach((input) => input.addEventListener('input', () => {
+  const card = input.closest('.paper-row');
+  const paperId = card?.dataset.paperId;
+  if (!paperId) return;
+  if (input.value) paperNotes[paperId] = input.value;
+  else delete paperNotes[paperId];
+  persistPaperNotes();
+}));
 document.querySelectorAll('.interests button').forEach((button) => button.addEventListener('click', () => {
   const dimension = button.dataset.dimension;
   const value = button.dataset.filter;
@@ -167,10 +202,16 @@ document.querySelectorAll('.interests button').forEach((button) => button.addEve
   document.querySelector('#papers').scrollIntoView({behavior:'smooth'});
 }));
 window.addEventListener('storage', (event) => {
-  if (event.key !== READ_STORAGE_KEY) return;
-  readPaperIds = loadReadPaperIds();
-  syncReadMarkers();
-  renderPapers();
+  if (event.key === READ_STORAGE_KEY) {
+    readPaperIds = loadReadPaperIds();
+    syncReadMarkers();
+    renderPapers();
+  }
+  if (event.key === NOTE_STORAGE_KEY) {
+    paperNotes = loadPaperNotes();
+    syncNoteFields();
+  }
 });
 syncReadMarkers();
+syncNoteFields();
 renderPapers();
