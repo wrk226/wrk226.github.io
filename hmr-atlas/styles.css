@@ -88,14 +88,23 @@ button, input { font: inherit; }
 .paper-main > p { max-width: 760px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.62; }
 .paper-main > .paper-authors { margin: -1px 0 8px; color: #777970; font: 8px var(--font-geist-mono); }
 .paper-main > .paper-core { margin: 3px 0 9px; color: var(--ink); }
-.paper-core > b, .paper-metrics > b { margin-right: 8px; color: var(--blue); font: 700 8px var(--font-geist-mono); letter-spacing: .06em; }
+.paper-core > b, .paper-metrics > b, .paper-datasets > b, .paper-resources > b { margin-right: 8px; color: var(--blue); font: 700 8px var(--font-geist-mono); letter-spacing: .06em; }
 .paper-summary { white-space: pre-line; }
 .paper-summary > b { margin-right: 8px; color: #d33a2c; font: 700 8px var(--font-geist-mono); letter-spacing: .06em; }
 .paper-main > .paper-metrics { margin-top: 9px; font-size: 9px; }
+.paper-main > .paper-datasets, .paper-main > .paper-resources { margin-top: 5px; font-size: 9px; }
+.paper-resources > a { margin-right: 10px; color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
 .paper-term { padding: 0 2px; color: #c83225; background: #f3e8e4; font-weight: 700; }
 .term-notes { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
 .term-notes > span { padding: 5px 7px; color: var(--muted); background: #f3e8e4; font-size: 8px; line-height: 1.45; }
 .term-notes b { margin-right: 5px; color: #c83225; font-family: var(--font-geist-mono); }
+.community-signals { margin-top: 10px; padding: 8px 10px; border-left: 2px solid var(--blue); background: rgba(34, 84, 125, .055); }
+.community-signals summary { cursor: pointer; color: var(--blue); font: 700 9px var(--font-geist-mono); }
+.community-signals > p { margin: 7px 0; color: var(--muted); font-size: 9px; }
+.community-signals ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.community-signals li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.community-signals a { overflow: hidden; color: var(--ink); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.community-signals li span { color: var(--muted); font: 8px var(--font-geist-mono); white-space: nowrap; }
 .paper-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 11px; }
 .paper-tags span { padding: 3px 6px; color: var(--muted); background: #eceae3; font: 8px var(--font-geist-mono); }
 .paper-note { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; max-width: 560px; margin-top: 12px; }
