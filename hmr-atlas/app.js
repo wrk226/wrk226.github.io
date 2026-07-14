@@ -1,6 +1,7 @@
 const READ_STORAGE_KEY = 'hmr-atlas:read-papers:v1';
 const NOTE_STORAGE_KEY = 'hmr-atlas:paper-notes:v1';
-const SUPABASE_BROWSER_SRC = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.3/dist/umd/supabase.js';
+const SUPABASE_BROWSER_SRC = './supabase.js?v=1';
+const SYNC_TIMEOUT_MS = 12000;
 const syncConfig = window.HMR_SYNC_CONFIG || {};
 const syncEnabled = Boolean(syncConfig.supabaseUrl && syncConfig.supabasePublishableKey);
 const stacks = [...document.querySelectorAll('.filter-stack')];
@@ -36,7 +37,7 @@ function setSyncStatus(status) {
   const username = syncUser?.user_metadata?.user_name || syncUser?.user_metadata?.preferred_username || syncUser?.user_metadata?.full_name || syncUser?.user_metadata?.name || 'GitHub';
   const label = !syncEnabled ? '本机保存' : status === 'connecting' ? '同步中…' : status === 'error' ? '同步失败' : syncUser ? '已同步 · ' + username : 'GitHub 登录同步';
   syncAccountButton.innerHTML = '<span aria-hidden="true">' + (syncUser ? '✓' : '↻') + '</span>' + label;
-  syncAccountButton.title = syncEnabled ? (syncUser ? '退出同步账号；本机记录仍保留' : '登录后在多个设备同步已读状态和注释') : '云端同步尚未配置，记录仅保存在本机';
+  syncAccountButton.title = status === 'error' ? '同步失败，点击重试' : syncEnabled ? (syncUser ? '退出同步账号；本机记录仍保留' : '登录后在多个设备同步已读状态和注释') : '云端同步尚未配置，记录仅保存在本机';
 }
 
 function loadSupabaseBrowser() {
@@ -47,12 +48,20 @@ function loadSupabaseBrowser() {
     const finish = () => window.supabase ? resolve(window.supabase) : reject(new Error('Supabase client failed to load'));
     script.addEventListener('load', finish, { once: true });
     script.addEventListener('error', () => reject(new Error('Supabase client failed to load')), { once: true });
+    window.setTimeout(() => reject(new Error('Supabase client load timed out')), SYNC_TIMEOUT_MS);
     if (!existing) {
       script.src = SUPABASE_BROWSER_SRC;
       script.crossOrigin = 'anonymous';
       document.head.appendChild(script);
     }
   });
+}
+
+function withSyncTimeout(request) {
+  return Promise.race([
+    Promise.resolve(request),
+    new Promise((_, reject) => window.setTimeout(() => reject(new Error('Sync request timed out')), SYNC_TIMEOUT_MS)),
+  ]);
 }
 
 function loadReadPaperIds() {
@@ -93,60 +102,62 @@ function persistPaperNotes() {
 async function syncOnePaper(paperId, isRead, note) {
   if (!syncClient || !syncUser) return;
   setSyncStatus('connecting');
-  const { error } = await syncClient.from('paper_user_state').upsert({
-    user_id: syncUser.id,
-    paper_id: paperId,
-    is_read: isRead,
-    note,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,paper_id' });
-  setSyncStatus(error ? 'error' : 'synced');
+  try {
+    const { error } = await withSyncTimeout(syncClient.from('paper_user_state').upsert({
+      user_id: syncUser.id,
+      paper_id: paperId,
+      is_read: isRead,
+      note,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,paper_id' }));
+    setSyncStatus(error ? 'error' : 'synced');
+  } catch {
+    setSyncStatus('error');
+  }
 }
 
 async function mergeCloudState(user) {
   setSyncStatus('connecting');
-  const localReads = loadReadPaperIds();
-  const localNotes = loadPaperNotes();
-  const { data, error } = await syncClient.from('paper_user_state').select('paper_id,is_read,note,updated_at');
-  if (error) {
-    setSyncStatus('error');
-    return;
-  }
-  const cloudRows = data || [];
-  const cloudIds = new Set(cloudRows.map((row) => row.paper_id));
-  const localIds = new Set([...localReads, ...Object.keys(localNotes)]);
-  const localOnlyIds = [...localIds].filter((paperId) => !cloudIds.has(paperId));
-  readPaperIds = new Set(localReads);
-  paperNotes = { ...localNotes };
-  cloudRows.forEach((row) => {
-    if (row.is_read) readPaperIds.add(row.paper_id);
-    else readPaperIds.delete(row.paper_id);
-    if (row.note) paperNotes[row.paper_id] = row.note;
-    else delete paperNotes[row.paper_id];
-  });
-  persistReadPaperIds();
-  persistPaperNotes();
-  syncReadMarkers();
-  syncNoteFields();
-  renderPapers();
-  for (const paperId of localOnlyIds) {
-    const result = await syncClient.from('paper_user_state').upsert({
-      user_id: user.id,
-      paper_id: paperId,
-      is_read: localReads.has(paperId),
-      note: localNotes[paperId] || '',
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,paper_id' });
-    if (result.error) {
-      setSyncStatus('error');
-      return;
+  try {
+    const localReads = loadReadPaperIds();
+    const localNotes = loadPaperNotes();
+    const { data, error } = await withSyncTimeout(syncClient.from('paper_user_state').select('paper_id,is_read,note,updated_at'));
+    if (error) throw new Error(error.message);
+    const cloudRows = data || [];
+    const cloudIds = new Set(cloudRows.map((row) => row.paper_id));
+    const localIds = new Set([...localReads, ...Object.keys(localNotes)]);
+    const localOnlyIds = [...localIds].filter((paperId) => !cloudIds.has(paperId));
+    readPaperIds = new Set(localReads);
+    paperNotes = { ...localNotes };
+    cloudRows.forEach((row) => {
+      if (row.is_read) readPaperIds.add(row.paper_id);
+      else readPaperIds.delete(row.paper_id);
+      if (row.note) paperNotes[row.paper_id] = row.note;
+      else delete paperNotes[row.paper_id];
+    });
+    persistReadPaperIds();
+    persistPaperNotes();
+    syncReadMarkers();
+    syncNoteFields();
+    renderPapers();
+    if (localOnlyIds.length > 0) {
+      const result = await withSyncTimeout(syncClient.from('paper_user_state').upsert(localOnlyIds.map((paperId) => ({
+        user_id: user.id,
+        paper_id: paperId,
+        is_read: localReads.has(paperId),
+        note: localNotes[paperId] || '',
+        updated_at: new Date().toISOString(),
+      })), { onConflict: 'user_id,paper_id' }));
+      if (result.error) throw new Error(result.error.message);
     }
+    setSyncStatus('synced');
+  } catch {
+      setSyncStatus('error');
   }
-  setSyncStatus('synced');
 }
 
 async function initSync() {
-  setSyncStatus(syncEnabled ? 'connecting' : 'local');
+  setSyncStatus('local');
   if (!syncEnabled) return;
   try {
     const library = await loadSupabaseBrowser();
@@ -162,9 +173,9 @@ async function initSync() {
       }
       if (hydratedUserId === syncUser.id) return;
       hydratedUserId = syncUser.id;
-      void mergeCloudState(syncUser);
+      window.setTimeout(() => void mergeCloudState(syncUser), 0);
     };
-    const { data } = await syncClient.auth.getSession();
+    const { data } = await withSyncTimeout(syncClient.auth.getSession());
     applySession(data.session);
     syncClient.auth.onAuthStateChange((_event, session) => applySession(session));
   } catch {
@@ -307,6 +318,10 @@ document.querySelectorAll('.paper-note-input').forEach((input) => input.addEvent
 }));
 if (syncAccountButton) syncAccountButton.addEventListener('click', async () => {
   if (!syncEnabled || !syncClient) return;
+  if (syncUser && syncAccountButton.classList.contains('error')) {
+    await mergeCloudState(syncUser);
+    return;
+  }
   if (syncUser) {
     await syncClient.auth.signOut();
     return;
