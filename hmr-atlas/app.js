@@ -24,6 +24,8 @@ let visibleLimit = 15;
 let readPaperIds = loadReadPaperIds();
 let paperNotes = loadPaperNotes();
 let syncClient = null;
+let syncInitPromise = null;
+let supabaseBrowserPromise = null;
 let syncUser = null;
 let hydratedUserId = '';
 let noteSyncTimers = {};
@@ -42,7 +44,8 @@ function setSyncStatus(status) {
 
 function loadSupabaseBrowser() {
   if (window.supabase) return Promise.resolve(window.supabase);
-  return new Promise((resolve, reject) => {
+  if (supabaseBrowserPromise) return supabaseBrowserPromise;
+  supabaseBrowserPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[src="' + SUPABASE_BROWSER_SRC + '"]');
     const script = existing || document.createElement('script');
     const finish = () => window.supabase ? resolve(window.supabase) : reject(new Error('Supabase client failed to load'));
@@ -55,6 +58,25 @@ function loadSupabaseBrowser() {
       document.head.appendChild(script);
     }
   });
+  supabaseBrowserPromise.catch(() => {
+    supabaseBrowserPromise = null;
+  });
+  return supabaseBrowserPromise;
+}
+
+function ensureSyncClient() {
+  if (syncClient) return Promise.resolve(syncClient);
+  if (syncInitPromise) return syncInitPromise;
+  syncInitPromise = loadSupabaseBrowser().then((library) => {
+    syncClient = library.createClient(syncConfig.supabaseUrl, syncConfig.supabasePublishableKey, {
+      auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' },
+    });
+    return syncClient;
+  });
+  syncInitPromise.catch(() => {
+    syncInitPromise = null;
+  });
+  return syncInitPromise;
 }
 
 function withSyncTimeout(request) {
@@ -160,10 +182,7 @@ async function initSync() {
   setSyncStatus('local');
   if (!syncEnabled) return;
   try {
-    const library = await loadSupabaseBrowser();
-    syncClient = library.createClient(syncConfig.supabaseUrl, syncConfig.supabasePublishableKey, {
-      auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' },
-    });
+    await ensureSyncClient();
     const applySession = (session) => {
       syncUser = session?.user || null;
       if (!syncUser) {
@@ -317,19 +336,28 @@ document.querySelectorAll('.paper-note-input').forEach((input) => input.addEvent
   }, 500);
 }));
 if (syncAccountButton) syncAccountButton.addEventListener('click', async () => {
-  if (!syncEnabled || !syncClient) return;
-  if (syncUser && syncAccountButton.classList.contains('error')) {
-    await mergeCloudState(syncUser);
-    return;
+  if (!syncEnabled) return;
+  const retrySync = Boolean(syncUser && syncAccountButton.classList.contains('error'));
+  setSyncStatus('connecting');
+  try {
+    await ensureSyncClient();
+    if (retrySync && syncUser) {
+      await mergeCloudState(syncUser);
+      return;
+    }
+    if (syncUser) {
+      const { error } = await withSyncTimeout(syncClient.auth.signOut());
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const { error } = await withSyncTimeout(syncClient.auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo: window.location.origin + window.location.pathname },
+    }));
+    if (error) throw new Error(error.message);
+  } catch {
+    setSyncStatus('error');
   }
-  if (syncUser) {
-    await syncClient.auth.signOut();
-    return;
-  }
-  await syncClient.auth.signInWithOAuth({
-    provider: 'github',
-    options: { redirectTo: window.location.origin + window.location.pathname },
-  });
 });
 document.querySelectorAll('.interests button').forEach((button) => button.addEventListener('click', () => {
   const dimension = button.dataset.dimension;
