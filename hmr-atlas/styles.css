@@ -23,8 +23,14 @@ button, input { font: inherit; }
 .nav-links { display: flex; gap: 28px; font-size: 12px; font-weight: 650; }
 .nav-links a:hover { color: var(--blue); }
 .nav-links a.active { color: var(--blue); }
+.nav-actions { justify-self: end; display: flex; align-items: center; gap: 12px; }
 .nav-status { justify-self: end; font: 600 9px var(--font-geist-mono); }
 .nav-status span, .live-dot { width: 7px; height: 7px; display: inline-block; margin-right: 7px; border-radius: 50%; background: #23a763; }
+.sync-account { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 5px 8px; color: var(--muted); background: var(--white); border: 1px solid var(--line); cursor: pointer; font: 700 8px var(--font-geist-mono); white-space: nowrap; }
+.sync-account:hover:not(:disabled) { color: var(--blue); border-color: var(--blue); }
+.sync-account:disabled { cursor: default; opacity: .78; }
+.sync-account.synced { color: var(--ink); background: var(--lime); border-color: var(--ink); }
+.sync-account.error { color: #b62c20; border-color: #b62c20; }
 
 .hero { padding: 92px 0 64px; border-bottom: 1px solid var(--line); }
 .eyebrow { margin: 0 0 15px; color: var(--blue); font: 700 10px var(--font-geist-mono); letter-spacing: .14em; }
@@ -194,7 +200,9 @@ footer { border-top: 1px solid var(--ink); background: var(--white); }
 @media (max-width: 600px) {
   .shell { width: calc(100% - 28px); }
   .nav { height: 60px; }
-  .nav-status { font-size: 8px; }
+  .nav-actions { gap: 6px; }
+  .nav-status { display: none; }
+  .sync-account { max-width: 150px; overflow: hidden; font-size: 8px; text-overflow: ellipsis; }
   .hero { padding: 58px 0 44px; }
   .hero h1 { font-size: 54px; }
   .hero-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; }

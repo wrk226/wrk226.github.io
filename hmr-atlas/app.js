@@ -1,5 +1,8 @@
 const READ_STORAGE_KEY = 'hmr-atlas:read-papers:v1';
 const NOTE_STORAGE_KEY = 'hmr-atlas:paper-notes:v1';
+const SUPABASE_BROWSER_SRC = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.3/dist/umd/supabase.js';
+const syncConfig = window.HMR_SYNC_CONFIG || {};
+const syncEnabled = Boolean(syncConfig.supabaseUrl && syncConfig.supabasePublishableKey);
 const stacks = [...document.querySelectorAll('.filter-stack')];
 const [domainStack, inputStack, taskStack, settingStack, yearStack] = stacks;
 const paperList = document.querySelector('.paper-list');
@@ -13,12 +16,44 @@ const publicationSelect = document.querySelector('#publication-filter');
 const readSelect = document.querySelector('#read-filter');
 const [citationMin, citationMax] = [...document.querySelectorAll('.range-inputs input')];
 const loadMore = document.querySelector('.load-more');
+const syncAccountButton = document.querySelector('.sync-account');
 const selected = { domain: new Set(), inputs: new Set(), task: new Set(), setting: new Set() };
 let activeYear = '全部年份';
 let visibleLimit = 15;
 let readPaperIds = loadReadPaperIds();
 let paperNotes = loadPaperNotes();
+let syncClient = null;
+let syncUser = null;
+let hydratedUserId = '';
+let noteSyncTimers = {};
 cards.forEach((card) => card.classList.remove('hidden-by-page'));
+
+function setSyncStatus(status) {
+  if (!syncAccountButton) return;
+  syncAccountButton.classList.remove('local', 'connecting', 'synced', 'error');
+  syncAccountButton.classList.add(status);
+  syncAccountButton.disabled = !syncEnabled || status === 'connecting';
+  const username = syncUser?.user_metadata?.user_name || syncUser?.user_metadata?.preferred_username || syncUser?.user_metadata?.full_name || syncUser?.user_metadata?.name || 'GitHub';
+  const label = !syncEnabled ? '本机保存' : status === 'connecting' ? '同步中…' : status === 'error' ? '同步失败' : syncUser ? '已同步 · ' + username : 'GitHub 登录同步';
+  syncAccountButton.innerHTML = '<span aria-hidden="true">' + (syncUser ? '✓' : '↻') + '</span>' + label;
+  syncAccountButton.title = syncEnabled ? (syncUser ? '退出同步账号；本机记录仍保留' : '登录后在多个设备同步已读状态和注释') : '云端同步尚未配置，记录仅保存在本机';
+}
+
+function loadSupabaseBrowser() {
+  if (window.supabase) return Promise.resolve(window.supabase);
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="' + SUPABASE_BROWSER_SRC + '"]');
+    const script = existing || document.createElement('script');
+    const finish = () => window.supabase ? resolve(window.supabase) : reject(new Error('Supabase client failed to load'));
+    script.addEventListener('load', finish, { once: true });
+    script.addEventListener('error', () => reject(new Error('Supabase client failed to load')), { once: true });
+    if (!existing) {
+      script.src = SUPABASE_BROWSER_SRC;
+      script.crossOrigin = 'anonymous';
+      document.head.appendChild(script);
+    }
+  });
+}
 
 function loadReadPaperIds() {
   try {
@@ -52,6 +87,88 @@ function persistPaperNotes() {
     localStorage.setItem(NOTE_STORAGE_KEY, JSON.stringify(paperNotes));
   } catch {
     // Keep notes usable for this session when browser storage is unavailable.
+  }
+}
+
+async function syncOnePaper(paperId, isRead, note) {
+  if (!syncClient || !syncUser) return;
+  setSyncStatus('connecting');
+  const { error } = await syncClient.from('paper_user_state').upsert({
+    user_id: syncUser.id,
+    paper_id: paperId,
+    is_read: isRead,
+    note,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,paper_id' });
+  setSyncStatus(error ? 'error' : 'synced');
+}
+
+async function mergeCloudState(user) {
+  setSyncStatus('connecting');
+  const localReads = loadReadPaperIds();
+  const localNotes = loadPaperNotes();
+  const { data, error } = await syncClient.from('paper_user_state').select('paper_id,is_read,note,updated_at');
+  if (error) {
+    setSyncStatus('error');
+    return;
+  }
+  const cloudRows = data || [];
+  const cloudIds = new Set(cloudRows.map((row) => row.paper_id));
+  const localIds = new Set([...localReads, ...Object.keys(localNotes)]);
+  const localOnlyIds = [...localIds].filter((paperId) => !cloudIds.has(paperId));
+  readPaperIds = new Set(localReads);
+  paperNotes = { ...localNotes };
+  cloudRows.forEach((row) => {
+    if (row.is_read) readPaperIds.add(row.paper_id);
+    else readPaperIds.delete(row.paper_id);
+    if (row.note) paperNotes[row.paper_id] = row.note;
+    else delete paperNotes[row.paper_id];
+  });
+  persistReadPaperIds();
+  persistPaperNotes();
+  syncReadMarkers();
+  syncNoteFields();
+  renderPapers();
+  for (const paperId of localOnlyIds) {
+    const result = await syncClient.from('paper_user_state').upsert({
+      user_id: user.id,
+      paper_id: paperId,
+      is_read: localReads.has(paperId),
+      note: localNotes[paperId] || '',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,paper_id' });
+    if (result.error) {
+      setSyncStatus('error');
+      return;
+    }
+  }
+  setSyncStatus('synced');
+}
+
+async function initSync() {
+  setSyncStatus(syncEnabled ? 'connecting' : 'local');
+  if (!syncEnabled) return;
+  try {
+    const library = await loadSupabaseBrowser();
+    syncClient = library.createClient(syncConfig.supabaseUrl, syncConfig.supabasePublishableKey, {
+      auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' },
+    });
+    const applySession = (session) => {
+      syncUser = session?.user || null;
+      if (!syncUser) {
+        hydratedUserId = '';
+        setSyncStatus('local');
+        return;
+      }
+      if (hydratedUserId === syncUser.id) return;
+      hydratedUserId = syncUser.id;
+      void mergeCloudState(syncUser);
+    };
+    const { data } = await syncClient.auth.getSession();
+    applySession(data.session);
+    syncClient.auth.onAuthStateChange((_event, session) => applySession(session));
+  } catch {
+    setSyncStatus('error');
   }
 }
 
@@ -172,6 +289,7 @@ document.querySelectorAll('.read-toggle').forEach((button) => button.addEventLis
   if (readPaperIds.has(paperId)) readPaperIds.delete(paperId);
   else readPaperIds.add(paperId);
   persistReadPaperIds();
+  void syncOnePaper(paperId, readPaperIds.has(paperId), paperNotes[paperId] || '');
   syncReadMarkers();
   renderPapers();
 }));
@@ -182,7 +300,22 @@ document.querySelectorAll('.paper-note-input').forEach((input) => input.addEvent
   if (input.value) paperNotes[paperId] = input.value;
   else delete paperNotes[paperId];
   persistPaperNotes();
+  clearTimeout(noteSyncTimers[paperId]);
+  noteSyncTimers[paperId] = setTimeout(() => {
+    void syncOnePaper(paperId, readPaperIds.has(paperId), input.value);
+  }, 500);
 }));
+if (syncAccountButton) syncAccountButton.addEventListener('click', async () => {
+  if (!syncEnabled || !syncClient) return;
+  if (syncUser) {
+    await syncClient.auth.signOut();
+    return;
+  }
+  await syncClient.auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  });
+});
 document.querySelectorAll('.interests button').forEach((button) => button.addEventListener('click', () => {
   const dimension = button.dataset.dimension;
   const value = button.dataset.filter;
@@ -212,6 +345,10 @@ window.addEventListener('storage', (event) => {
     syncNoteFields();
   }
 });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && syncClient && syncUser) void mergeCloudState(syncUser);
+});
 syncReadMarkers();
 syncNoteFields();
 renderPapers();
+void initSync();
