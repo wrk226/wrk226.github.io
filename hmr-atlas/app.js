@@ -238,6 +238,8 @@ function sortCards(items) {
 
 function renderPapers() {
   const needle = (search.value || '').trim().toLowerCase();
+  const arxivId = needle.match(/(\d{4}\.\d{4,5})(?:v\d+)?/i)?.[1] || '';
+  const needles = [...new Set([needle, arxivId].filter(Boolean))];
   const min = citationMin.value === '' ? null : Number(citationMin.value);
   const max = citationMax.value === '' ? null : Number(citationMax.value);
   const publication = publicationSelect.value;
@@ -256,7 +258,8 @@ function renderPapers() {
     const publicationMatch = publication === 'all' || card.dataset.publication === publication;
     const isRead = readPaperIds.has(card.dataset.paperId);
     const readMatch = readFilter === 'all' || (readFilter === 'read' ? isRead : !isRead);
-    const textMatch = !needle || card.textContent.toLowerCase().includes(needle);
+    const haystack = `${card.dataset.search || ''} ${card.textContent || ''}`.toLowerCase();
+    const textMatch = needles.length === 0 || needles.some((value) => haystack.includes(value));
     return domainMatch && inputMatch && taskMatch && settingMatch && yearMatch && citationMatch && publicationMatch && readMatch && textMatch;
   }));
 
