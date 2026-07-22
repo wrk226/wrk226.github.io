@@ -1,4 +1,6 @@
 const READ_STORAGE_KEY = 'hmr-atlas:read-papers:v1';
+const NOT_INTERESTED_STORAGE_KEY = 'hmr-atlas:not-interested-papers:v1';
+const NOT_INTERESTED_ROW_PREFIX = '__not_interested__:';
 const NOTE_STORAGE_KEY = 'hmr-atlas:paper-notes:v1';
 const SUPABASE_BROWSER_SRC = './supabase.js?v=1';
 const SYNC_TIMEOUT_MS = 12000;
@@ -22,6 +24,7 @@ const selected = { domain: new Set(), inputs: new Set(), task: new Set(), settin
 let activeYear = '全部年份';
 let visibleLimit = 15;
 let readPaperIds = loadReadPaperIds();
+let notInterestedPaperIds = loadNotInterestedPaperIds();
 let paperNotes = loadPaperNotes();
 let syncClient = null;
 let syncInitPromise = null;
@@ -39,7 +42,7 @@ function setSyncStatus(status) {
   const username = syncUser?.user_metadata?.user_name || syncUser?.user_metadata?.preferred_username || syncUser?.user_metadata?.full_name || syncUser?.user_metadata?.name || 'GitHub';
   const label = !syncEnabled ? '本机保存' : status === 'connecting' ? '同步中…' : status === 'error' ? '同步失败' : syncUser ? '已同步 · ' + username : 'GitHub 登录同步';
   syncAccountButton.innerHTML = '<span aria-hidden="true">' + (syncUser ? '✓' : '↻') + '</span>' + label;
-  syncAccountButton.title = status === 'error' ? '同步失败，点击重试' : syncEnabled ? (syncUser ? '退出同步账号；本机记录仍保留' : '登录后在多个设备同步已读状态和注释') : '云端同步尚未配置，记录仅保存在本机';
+  syncAccountButton.title = status === 'error' ? '同步失败，点击重试' : syncEnabled ? (syncUser ? '退出同步账号；本机记录仍保留' : '登录后在多个设备同步已读状态、不感兴趣和注释') : '云端同步尚未配置，记录仅保存在本机';
 }
 
 function loadSupabaseBrowser() {
@@ -103,6 +106,25 @@ function persistReadPaperIds() {
   }
 }
 
+
+
+function loadNotInterestedPaperIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(NOT_INTERESTED_STORAGE_KEY) || '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((item) => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistNotInterestedPaperIds() {
+  try {
+    localStorage.setItem(NOT_INTERESTED_STORAGE_KEY, JSON.stringify([...notInterestedPaperIds]));
+  } catch {
+    // Keep the marker usable for this session when browser storage is unavailable.
+  }
+}
+
 function loadPaperNotes() {
   try {
     const stored = JSON.parse(localStorage.getItem(NOTE_STORAGE_KEY) || '{}');
@@ -138,43 +160,83 @@ async function syncOnePaper(paperId, isRead, note) {
   }
 }
 
+async function syncNotInterestedPaper(paperId, isNotInterested) {
+  if (!syncClient || !syncUser) return;
+  setSyncStatus("connecting");
+  try {
+    const { error } = await withSyncTimeout(syncClient.from("paper_user_state").upsert({
+      user_id: syncUser.id,
+      paper_id: NOT_INTERESTED_ROW_PREFIX + paperId,
+      is_read: isNotInterested,
+      note: "",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,paper_id" }));
+    setSyncStatus(error ? "error" : "synced");
+  } catch {
+    setSyncStatus("error");
+  }
+}
+
 async function mergeCloudState(user) {
-  setSyncStatus('connecting');
+  setSyncStatus("connecting");
   try {
     const localReads = loadReadPaperIds();
+    const localNotInterested = loadNotInterestedPaperIds();
     const localNotes = loadPaperNotes();
-    const { data, error } = await withSyncTimeout(syncClient.from('paper_user_state').select('paper_id,is_read,note,updated_at'));
+    const { data, error } = await withSyncTimeout(syncClient.from("paper_user_state").select("paper_id,is_read,note,updated_at"));
     if (error) throw new Error(error.message);
     const cloudRows = data || [];
-    const cloudIds = new Set(cloudRows.map((row) => row.paper_id));
+    const cloudInterestRows = cloudRows.filter((row) => row.paper_id.startsWith(NOT_INTERESTED_ROW_PREFIX));
+    const cloudPaperRows = cloudRows.filter((row) => !row.paper_id.startsWith(NOT_INTERESTED_ROW_PREFIX));
+    const cloudIds = new Set(cloudPaperRows.map((row) => row.paper_id));
+    const cloudInterestIds = new Set(cloudInterestRows.map((row) => row.paper_id.slice(NOT_INTERESTED_ROW_PREFIX.length)));
     const localIds = new Set([...localReads, ...Object.keys(localNotes)]);
     const localOnlyIds = [...localIds].filter((paperId) => !cloudIds.has(paperId));
+    const localOnlyInterestIds = [...localNotInterested].filter((paperId) => !cloudInterestIds.has(paperId));
     readPaperIds = new Set(localReads);
+    notInterestedPaperIds = new Set(localNotInterested);
     paperNotes = { ...localNotes };
-    cloudRows.forEach((row) => {
+    cloudPaperRows.forEach((row) => {
       if (row.is_read) readPaperIds.add(row.paper_id);
       else readPaperIds.delete(row.paper_id);
       if (row.note) paperNotes[row.paper_id] = row.note;
       else delete paperNotes[row.paper_id];
     });
+    cloudInterestRows.forEach((row) => {
+      const paperId = row.paper_id.slice(NOT_INTERESTED_ROW_PREFIX.length);
+      if (row.is_read) notInterestedPaperIds.add(paperId);
+      else notInterestedPaperIds.delete(paperId);
+    });
     persistReadPaperIds();
+    persistNotInterestedPaperIds();
     persistPaperNotes();
     syncReadMarkers();
+    syncNotInterestedMarkers();
     syncNoteFields();
     renderPapers();
     if (localOnlyIds.length > 0) {
-      const result = await withSyncTimeout(syncClient.from('paper_user_state').upsert(localOnlyIds.map((paperId) => ({
+      const result = await withSyncTimeout(syncClient.from("paper_user_state").upsert(localOnlyIds.map((paperId) => ({
         user_id: user.id,
         paper_id: paperId,
         is_read: localReads.has(paperId),
-        note: localNotes[paperId] || '',
+        note: localNotes[paperId] || "",
         updated_at: new Date().toISOString(),
-      })), { onConflict: 'user_id,paper_id' }));
+      })), { onConflict: "user_id,paper_id" }));
       if (result.error) throw new Error(result.error.message);
     }
-    setSyncStatus('synced');
+    if (localOnlyInterestIds.length > 0) {
+      const result = await withSyncTimeout(syncClient.from("paper_user_state").upsert(localOnlyInterestIds.map((paperId) => ({
+        user_id: user.id,
+        paper_id: NOT_INTERESTED_ROW_PREFIX + paperId,
+        is_read: true,
+        note: "",
+        updated_at: new Date().toISOString(),
+      })), { onConflict: "user_id,paper_id" }));
+      if (result.error) throw new Error(result.error.message);
+    }
+    setSyncStatus("synced");
   } catch {
-      setSyncStatus('error');
+    setSyncStatus("error");
   }
 }
 
@@ -216,6 +278,19 @@ function syncReadMarkers() {
     button.setAttribute('aria-pressed', isRead ? 'true' : 'false');
     button.setAttribute('aria-label', (isRead ? '标记为未读：' : '标记为已读：') + (card.querySelector('h3')?.textContent || '论文'));
     button.innerHTML = '<span aria-hidden="true">' + (isRead ? '✓' : '○') + '</span>' + (isRead ? '已读' : '未读');
+  });
+}
+
+function syncNotInterestedMarkers() {
+  cards.forEach((card) => {
+    const isNotInterested = notInterestedPaperIds.has(card.dataset.paperId);
+    const button = card.querySelector(".interest-toggle");
+    card.dataset.notInterested = isNotInterested ? "true" : "false";
+    card.classList.toggle("is-not-interested", isNotInterested);
+    if (!button) return;
+    button.setAttribute("aria-pressed", isNotInterested ? "true" : "false");
+    button.setAttribute("aria-label", (isNotInterested ? "取消不感兴趣：" : "标记为不感兴趣：") + (card.querySelector("h3")?.textContent || "论文"));
+    button.innerHTML = '<span aria-hidden="true">' + (isNotInterested ? "×" : "−") + '</span>不感兴趣';
   });
 }
 
@@ -335,6 +410,7 @@ document.querySelectorAll('.read-toggle').forEach((button) => button.addEventLis
   syncReadMarkers();
   renderPapers();
 }));
+document.querySelectorAll('.interest-toggle').forEach((button) => button.addEventListener('click', () => { const card = button.closest('.paper-row'); const paperId = card?.dataset.paperId; if (!paperId) return; if (notInterestedPaperIds.has(paperId)) notInterestedPaperIds.delete(paperId); else notInterestedPaperIds.add(paperId); persistNotInterestedPaperIds(); void syncNotInterestedPaper(paperId, notInterestedPaperIds.has(paperId)); syncNotInterestedMarkers(); }));
 document.querySelectorAll('.paper-note-input').forEach((input) => input.addEventListener('input', () => {
   resizeNoteField(input);
   const card = input.closest('.paper-row');
@@ -396,6 +472,10 @@ window.addEventListener('storage', (event) => {
     syncReadMarkers();
     renderPapers();
   }
+  if (event.key === NOT_INTERESTED_STORAGE_KEY) {
+    notInterestedPaperIds = loadNotInterestedPaperIds();
+    syncNotInterestedMarkers();
+  }
   if (event.key === NOTE_STORAGE_KEY) {
     paperNotes = loadPaperNotes();
     syncNoteFields();
@@ -405,6 +485,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && syncClient && syncUser) void mergeCloudState(syncUser);
 });
 syncReadMarkers();
+syncNotInterestedMarkers();
 syncNoteFields();
 renderPapers();
 void initSync();
