@@ -84,8 +84,8 @@ button, input { font: inherit; }
 .paper-list { border-top: 1px solid var(--line); }
 .paper-row.hidden-by-page { display: none !important; }
 .paper-row[hidden] { display: none !important; }
-.paper-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) 70px; gap: 20px; padding: 23px 4px; border-bottom: 1px solid var(--line); transition: background .15s, padding .15s; }
-.paper-row:hover { padding-inline: 12px; background: var(--white); }
+.paper-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) 70px; gap: 20px; padding: 23px 4px; border-bottom: 1px solid var(--line); transition: background .15s; }
+.paper-row:hover { background: var(--white); }
 .paper-row.is-read { background: rgba(255, 254, 250, .5); }
 .paper-row > time { padding-top: 3px; color: var(--muted); font: 9px var(--font-geist-mono); }
 .paper-topline { display: flex; gap: 12px; flex-wrap: wrap; color: var(--blue); font: 8px var(--font-geist-mono); letter-spacing: .04em; }
@@ -113,9 +113,9 @@ button, input { font: inherit; }
 .community-signals li span { color: var(--muted); font: 8px var(--font-geist-mono); white-space: nowrap; }
 .paper-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 11px; }
 .paper-tags span { padding: 3px 6px; color: var(--muted); background: #eceae3; font: 8px var(--font-geist-mono); }
-.paper-note { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; max-width: 560px; margin-top: 12px; }
+.paper-note { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; max-width: 560px; margin-top: 12px; }
 .paper-note > span { color: var(--muted); font: 700 8px var(--font-geist-mono); white-space: nowrap; }
-.paper-note-input { width: 100%; min-width: 0; padding: 7px 9px; color: var(--ink); background: rgba(255, 254, 250, .65); border: 1px solid var(--line); outline: 0; font-size: 10px; }
+.paper-note-input { width: 100%; min-width: 0; min-height: 48px; padding: 7px 9px; overflow: hidden; resize: vertical; field-sizing: content; color: var(--ink); background: rgba(255, 254, 250, .65); border: 1px solid var(--line); outline: 0; font: inherit; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
 .paper-note-input::placeholder { color: #999b94; }
 .paper-note-input:focus { background: var(--white); border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .paper-main h3 a:hover { color: var(--blue); }

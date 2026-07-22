@@ -219,10 +219,18 @@ function syncReadMarkers() {
   });
 }
 
+function resizeNoteField(input) {
+  if (!input) return;
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+}
+
 function syncNoteFields() {
   cards.forEach((card) => {
     const input = card.querySelector('.paper-note-input');
-    if (input) input.value = paperNotes[card.dataset.paperId] || '';
+    if (!input) return;
+    input.value = paperNotes[card.dataset.paperId] || '';
+    if (!card.hidden) resizeNoteField(input);
   });
 }
 
@@ -271,6 +279,7 @@ function renderPapers() {
     const shouldShow = matchedSet.has(card) && index < visibleLimit;
     card.hidden = !shouldShow;
     card.style.setProperty('display', shouldShow ? 'grid' : 'none', 'important');
+    if (shouldShow) resizeNoteField(card.querySelector('.paper-note-input'));
   });
   const labels = [...selected.domain, ...selected.inputs, ...selected.task, ...selected.setting];
   if (readFilter === 'read') labels.push('已读');
@@ -327,6 +336,7 @@ document.querySelectorAll('.read-toggle').forEach((button) => button.addEventLis
   renderPapers();
 }));
 document.querySelectorAll('.paper-note-input').forEach((input) => input.addEventListener('input', () => {
+  resizeNoteField(input);
   const card = input.closest('.paper-row');
   const paperId = card?.dataset.paperId;
   if (!paperId) return;
