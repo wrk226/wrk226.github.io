@@ -19,6 +19,7 @@ const publicationSelect = document.querySelector('#publication-filter');
 const readSelect = document.querySelector('#read-filter');
 const [citationMin, citationMax] = [...document.querySelectorAll('.range-inputs input')];
 const loadMore = document.querySelector('.load-more');
+const filterDisclosure = document.querySelector('.filter-disclosure');
 const syncAccountButton = document.querySelector('.sync-account');
 const selected = { domain: new Set(), inputs: new Set(), task: new Set(), setting: new Set() };
 let activeYear = '全部年份';
@@ -33,6 +34,15 @@ let syncUser = null;
 let hydratedUserId = '';
 let noteSyncTimers = {};
 cards.forEach((card) => card.classList.remove('hidden-by-page'));
+
+if (filterDisclosure) {
+  const mobileFilters = window.matchMedia('(max-width: 600px)');
+  const syncFilterVisibility = () => {
+    filterDisclosure.open = !mobileFilters.matches;
+  };
+  syncFilterVisibility();
+  mobileFilters.addEventListener('change', syncFilterVisibility);
+}
 
 function setSyncStatus(status) {
   if (!syncAccountButton) return;

@@ -48,7 +48,6 @@ button, input { font: inherit; }
 .library { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 76px 0 100px; }
 .filter-disclosure { display: contents; }
 .filter-disclosure > summary { display: none; }
-.filter-disclosure:not([open]) > .library-sidebar { display: block; }
 .library-sidebar { align-self: start; position: sticky; top: 24px; max-height: calc(100vh - 48px); padding-right: 8px; overflow-y: auto; }
 .paper-search { display: flex; align-items: center; height: 44px; padding: 0 12px; background: var(--white); border: 1px solid var(--line); }
 .paper-search span { color: var(--blue); font-size: 18px; }
