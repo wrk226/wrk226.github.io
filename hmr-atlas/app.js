@@ -353,7 +353,8 @@ function renderPapers() {
     const readMatch = readFilter === 'all' || (readFilter === 'read' ? isRead : !isRead);
     const haystack = `${card.dataset.search || ''} ${card.textContent || ''}`.toLowerCase();
     const textMatch = needles.length === 0 || needles.some((value) => haystack.includes(value));
-    return domainMatch && inputMatch && taskMatch && settingMatch && yearMatch && citationMatch && publicationMatch && readMatch && textMatch;
+    const researchMatch = !window.HMR_ATLAS_RESEARCH_MATCHES || window.HMR_ATLAS_RESEARCH_MATCHES(card);
+    return domainMatch && inputMatch && taskMatch && settingMatch && yearMatch && citationMatch && publicationMatch && readMatch && textMatch && researchMatch;
   }));
 
   matchedCards.forEach((card) => paperList.insertBefore(card, emptyState));
@@ -376,6 +377,9 @@ function renderPapers() {
     loadMore.hidden = matched <= visibleLimit;
     loadMore.innerHTML = '继续显示 <span>' + Math.max(0, matched - visibleLimit) + '</span> 篇';
   }
+  document.dispatchEvent(new CustomEvent('hmr-atlas:papers-rendered', { detail: {
+    visibleIds: matchedCards.slice(0, visibleLimit).map((card) => card.dataset.paperId),
+  } }));
 }
 
 function bindMulti(stack, dimension) {
@@ -408,6 +412,7 @@ bindMulti(settingStack, 'setting');
   renderPapers();
 }));
 [search, sortSelect, publicationSelect, readSelect, citationMin, citationMax].forEach((control) => control.addEventListener('input', () => { visibleLimit = 15; renderPapers(); }));
+document.addEventListener('hmr-atlas:research-filter', () => { visibleLimit = 15; renderPapers(); });
 if (loadMore) loadMore.addEventListener('click', () => { visibleLimit += 15; renderPapers(); });
 document.querySelectorAll('.read-toggle').forEach((button) => button.addEventListener('click', () => {
   const card = button.closest('.paper-row');
